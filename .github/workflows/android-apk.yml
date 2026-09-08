@@ -62,9 +62,40 @@ jobs:
           export/android/android_sdk_path = "$ANDROID_HOME"
           EOF
 
+      - name: Enable ETC2 ASTC
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          path = Path("project.godot")
+          text = path.read_text(encoding="utf-8")
+
+          setting = "textures/vram_compression/import_etc2_astc=true"
+
+          if setting not in text:
+              if "[rendering]" in text:
+                  text = text.replace(
+                      "[rendering]",
+                      "[rendering]\n" + setting,
+                      1
+                  )
+              else:
+                  text += "\n[rendering]\n" + setting + "\n"
+
+              path.write_text(text, encoding="utf-8")
+
+          print("ETC2/ASTC enabled")
+          PY
+
+          grep -n "import_etc2_astc" project.godot
+
       - name: Import project
         run: |
-          godot --headless --path . --editor --quit
+          godot \
+            --headless \
+            --path . \
+            --editor \
+            --quit
 
       - name: Build APK
         env:
@@ -83,8 +114,10 @@ jobs:
 
       - name: Check APK
         run: |
+          echo "Checking APK..."
           ls -lh build/
           test -f build/retro_runner.apk
+          echo "APK successfully created!"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
