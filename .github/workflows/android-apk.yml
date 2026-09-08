@@ -1,0 +1,48 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.1'
+
+      - name: Set up Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.3.3
+          include-templates: true
+
+      - name: Import project
+        run: godot --headless --path . --editor --quit
+
+      - name: Build APK
+        run: |
+          mkdir -p build
+          godot --headless --path . --export-debug "Android" build/retro_runner.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: retro-runner-apk
+          path: build/retro_runner.apk
+          if-no-files-found: error
