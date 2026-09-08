@@ -8,6 +8,7 @@ on:
 jobs:
   build-apk:
     runs-on: ubuntu-latest
+
     permissions:
       contents: read
 
@@ -29,23 +30,24 @@ jobs:
       - name: Set up Godot
         uses: chickensoft-games/setup-godot@v2
         with:
-          version: 4.3.0
+          version: 4.3-stable
           use-dotnet: false
           include-templates: true
 
+      - name: Configure Godot Android paths
+        run: |
+          mkdir -p ~/.config/godot
+          cat > ~/.config/godot/editor_settings-4.tres <<EOF
+          [gd_resource format=3]
+
+          [resource]
+          export/android/java_sdk_path = "$JAVA_HOME"
+          export/android/android_sdk_path = "$ANDROID_HOME"
+          EOF
+
       - name: Import project
-        run: godot --headless --path . --editor quit
-
-       - name: Configure Godot Android paths
-  run: |
-    mkdir -p ~/.config/godot
-    cat > ~/.config/godot/editor_settings-4.tres <<EOF
-    [gd_resource format=3]
-
-    [resource]
-    export/android/java_sdk_path = "$JAVA_HOME"
-    export/android/android_sdk_path = "$ANDROID_HOME"
-    EOF
+        run: |
+          godot --headless --path . --editor --quit
 
       - name: Build APK
         run: |
