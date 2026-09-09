@@ -5,6 +5,7 @@ var camera: Camera3D
 var hud: Label
 
 var buildings: Array[Node3D] = []
+var ramp_parts: Array[Node3D] = []
 
 var speed: float = 10.0
 var lane: int = 1
@@ -117,7 +118,7 @@ func _ready() -> void:
     add_child(player)
 
 
-    # Body
+    # Корпус
 
     var body := MeshInstance3D.new()
     var body_mesh := BoxMesh.new()
@@ -134,7 +135,7 @@ func _ready() -> void:
     player.add_child(body)
 
 
-    # Seat
+    # Сиденье
 
     var seat := MeshInstance3D.new()
     var seat_mesh := BoxMesh.new()
@@ -152,17 +153,24 @@ func _ready() -> void:
 
 
     # =========================
-    # CITY BUILDINGS
+    # ГОРОД
     # =========================
 
-    _create_building(-9.0, 8.0, -20.0, 5.0, 16.0, 5.0)
-    _create_building(9.0, 11.0, -32.0, 5.0, 22.0, 5.0)
+    _create_building(-9.0, 16.0, -20.0, 5.0, 16.0, 5.0)
+    _create_building(9.0, 22.0, -32.0, 5.0, 22.0, 5.0)
 
-    _create_building(-10.0, 13.0, -50.0, 6.0, 26.0, 6.0)
-    _create_building(10.0, 9.0, -65.0, 5.0, 18.0, 5.0)
+    _create_building(-10.0, 26.0, -50.0, 6.0, 26.0, 6.0)
+    _create_building(10.0, 18.0, -65.0, 5.0, 18.0, 5.0)
 
-    _create_building(-9.0, 18.0, -82.0, 6.0, 36.0, 6.0)
-    _create_building(10.0, 14.0, -100.0, 6.0, 28.0, 6.0)
+    _create_building(-9.0, 36.0, -82.0, 6.0, 36.0, 6.0)
+    _create_building(10.0, 28.0, -100.0, 6.0, 28.0, 6.0)
+
+
+    # =========================
+    # ПЕРВЫЙ ТРАМПЛИН
+    # =========================
+
+    _create_ramp()
 
 
     # =========================
@@ -264,7 +272,7 @@ func _create_building(
     window_material.emission_energy_multiplier = 1.5
 
 
-    # Front window strip
+    # Передние окна
 
     var windows_front := MeshInstance3D.new()
     var windows_front_mesh := BoxMesh.new()
@@ -288,7 +296,7 @@ func _create_building(
     building.add_child(windows_front)
 
 
-    # Side window strip
+    # Боковые окна
 
     var windows_side := MeshInstance3D.new()
     var windows_side_mesh := BoxMesh.new()
@@ -312,10 +320,134 @@ func _create_building(
     building.add_child(windows_side)
 
 
+func _create_ramp() -> void:
+
+    # Трамплин собираем из нескольких секций.
+    # Это надёжнее для нашего мобильного теста,
+    # чем сложная геометрия.
+
+    var ramp_material := StandardMaterial3D.new()
+
+    ramp_material.albedo_color = Color(
+        0.75,
+        0.05,
+        0.03
+    )
+
+    ramp_material.emission_enabled = true
+    ramp_material.emission = Color(
+        0.35,
+        0.01,
+        0.01
+    )
+
+    ramp_material.emission_energy_multiplier = 1.2
+
+
+    # Секция 1
+
+    var part1 := Node3D.new()
+    part1.position = Vector3(0, 0.15, -55)
+
+    add_child(part1)
+    ramp_parts.append(part1)
+
+    var mesh1 := MeshInstance3D.new()
+    var box1 := BoxMesh.new()
+
+    box1.size = Vector3(6.5, 0.3, 2.0)
+    mesh1.mesh = box1
+
+    mesh1.position = Vector3(0, 0.15, 0)
+    mesh1.material_override = ramp_material
+
+    part1.add_child(mesh1)
+
+
+    # Секция 2
+
+    var part2 := Node3D.new()
+    part2.position = Vector3(0, 0.35, -53)
+
+    add_child(part2)
+    ramp_parts.append(part2)
+
+    var mesh2 := MeshInstance3D.new()
+    var box2 := BoxMesh.new()
+
+    box2.size = Vector3(6.5, 0.7, 2.0)
+    mesh2.mesh = box2
+
+    mesh2.position = Vector3(0, 0.35, 0)
+    mesh2.material_override = ramp_material
+
+    part2.add_child(mesh2)
+
+
+    # Секция 3
+
+    var part3 := Node3D.new()
+    part3.position = Vector3(0, 0.65, -51)
+
+    add_child(part3)
+    ramp_parts.append(part3)
+
+    var mesh3 := MeshInstance3D.new()
+    var box3 := BoxMesh.new()
+
+    box3.size = Vector3(6.5, 1.3, 2.0)
+    mesh3.mesh = box3
+
+    mesh3.position = Vector3(0, 0.65, 0)
+    mesh3.material_override = ramp_material
+
+    part3.add_child(mesh3)
+
+
+    # Секция 4
+
+    var part4 := Node3D.new()
+    part4.position = Vector3(0, 1.0, -49)
+
+    add_child(part4)
+    ramp_parts.append(part4)
+
+    var mesh4 := MeshInstance3D.new()
+    var box4 := BoxMesh.new()
+
+    box4.size = Vector3(6.5, 2.0, 2.0)
+    mesh4.mesh = box4
+
+    mesh4.position = Vector3(0, 1.0, 0)
+    mesh4.material_override = ramp_material
+
+    part4.add_child(mesh4)
+
+
+    # Секция 5 — верх
+
+    var part5 := Node3D.new()
+    part5.position = Vector3(0, 1.35, -47)
+
+    add_child(part5)
+    ramp_parts.append(part5)
+
+    var mesh5 := MeshInstance3D.new()
+    var box5 := BoxMesh.new()
+
+    box5.size = Vector3(6.5, 2.7, 2.0)
+    mesh5.mesh = box5
+
+    mesh5.position = Vector3(0, 1.35, 0)
+    mesh5.material_override = ramp_material
+
+    part5.add_child(mesh5)
+
+
 func _process(delta: float) -> void:
 
     # =========================
-    # DISTANCE
+    # ДИСТАНЦИЯ
     # =========================
 
     distance += speed * delta
@@ -324,7 +456,7 @@ func _process(delta: float) -> void:
 
 
     # =========================
-    # CITY MOVEMENT
+    # ДВИЖЕНИЕ ГОРОДА
     # =========================
 
     for building in buildings:
@@ -339,7 +471,22 @@ func _process(delta: float) -> void:
 
 
     # =========================
-    # PLAYER LANES
+    # ДВИЖЕНИЕ ТРАМПЛИНА
+    # =========================
+
+    for part in ramp_parts:
+
+        if part != null:
+
+            part.position.z += speed * delta
+
+            if part.position.z > 15.0:
+
+                part.position.z -= 100.0
+
+
+    # =========================
+    # ДВИЖЕНИЕ КВАДРОЦИКЛА
     # =========================
 
     if player != null:
@@ -347,12 +494,15 @@ func _process(delta: float) -> void:
         var target_x: float = 0.0
 
         if lane == 0:
+
             target_x = -3.5
 
         elif lane == 1:
+
             target_x = 0.0
 
         else:
+
             target_x = 3.5
 
 
@@ -413,6 +563,7 @@ func _unhandled_input(event: InputEvent) -> void:
     elif event is InputEventKey:
 
         if not event.pressed:
+
             return
 
         if event.keycode == KEY_LEFT:
