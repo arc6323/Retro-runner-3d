@@ -15,21 +15,17 @@ var score: int = 0
 
 var touch_start: Vector2 = Vector2.ZERO
 
-# =========================
-# JUMP
-# =========================
-
+# Прыжок
 var jumping: bool = false
 var jump_velocity: float = 0.0
 var jump_gravity: float = 24.0
 
-# Трамплин находится на средней полосе
-# 0 = левая
-# 1 = середина
-# 2 = правая
+# 0 = левая, 1 = середина, 2 = правая
 var ramp_lane: int = 1
 
 var ramp_used: bool = false
+
+# Кувырок
 var trick_angle: float = 0.0
 
 
@@ -117,8 +113,6 @@ func _ready() -> void:
     )
 
 
-    # Левая линия
-
     var line_left := MeshInstance3D.new()
     var line_mesh_left := BoxMesh.new()
 
@@ -140,8 +134,6 @@ func _ready() -> void:
 
     add_child(line_left)
 
-
-    # Правая линия
 
     var line_right := MeshInstance3D.new()
     var line_mesh_right := BoxMesh.new()
@@ -166,7 +158,7 @@ func _ready() -> void:
 
 
     # =========================
-    # QUADRO
+    # QUAD
     # =========================
 
     player = Node3D.new()
@@ -254,53 +246,14 @@ func _ready() -> void:
     # CITY
     # =========================
 
-    _create_building(
-        -9.0,
-        -20.0,
-        5.0,
-        16.0,
-        5.0
-    )
+    _create_building(-9.0, -20.0, 5.0, 16.0, 5.0)
+    _create_building(9.0, -32.0, 5.0, 22.0, 5.0)
 
-    _create_building(
-        9.0,
-        -32.0,
-        5.0,
-        22.0,
-        5.0
-    )
+    _create_building(-10.0, -50.0, 6.0, 26.0, 6.0)
+    _create_building(10.0, -65.0, 5.0, 18.0, 5.0)
 
-    _create_building(
-        -10.0,
-        -50.0,
-        6.0,
-        26.0,
-        6.0
-    )
-
-    _create_building(
-        10.0,
-        -65.0,
-        5.0,
-        18.0,
-        5.0
-    )
-
-    _create_building(
-        -9.0,
-        -82.0,
-        6.0,
-        36.0,
-        6.0
-    )
-
-    _create_building(
-        10.0,
-        -100.0,
-        6.0,
-        28.0,
-        6.0
-    )
+    _create_building(-9.0, -82.0, 6.0, 36.0, 6.0)
+    _create_building(10.0, -100.0, 6.0, 28.0, 6.0)
 
 
     # =========================
@@ -470,7 +423,6 @@ func _create_ramp() -> void:
 
     # =========================
     # RAMP
-    # Только средняя полоса
     # =========================
 
     ramp = Node3D.new()
@@ -484,9 +436,7 @@ func _create_ramp() -> void:
     add_child(ramp)
 
 
-    # =========================
-    # ОСНОВА ТРАМПЛИНА
-    # =========================
+    # Основная поверхность
 
     var ramp_mesh := MeshInstance3D.new()
     var ramp_box := BoxMesh.new()
@@ -531,9 +481,7 @@ func _create_ramp() -> void:
     ramp.add_child(ramp_mesh)
 
 
-    # =========================
-    # ЛЕВЫЙ БОРТ
-    # =========================
+    # Левый борт
 
     var side_left := MeshInstance3D.new()
     var side_left_mesh := BoxMesh.new()
@@ -559,9 +507,7 @@ func _create_ramp() -> void:
     ramp.add_child(side_left)
 
 
-    # =========================
-    # ПРАВЫЙ БОРТ
-    # =========================
+    # Правый борт
 
     var side_right := MeshInstance3D.new()
     var side_right_mesh := BoxMesh.new()
@@ -587,9 +533,7 @@ func _create_ramp() -> void:
     ramp.add_child(side_right)
 
 
-    # =========================
-    # НЕОН
-    # =========================
+    # Неон
 
     var neon := MeshInstance3D.new()
     var neon_mesh := BoxMesh.new()
@@ -662,7 +606,7 @@ func _process(delta: float) -> void:
 
 
     # =========================
-    # CITY
+    # CITY MOVEMENT
     # =========================
 
     for building in buildings:
@@ -684,6 +628,7 @@ func _process(delta: float) -> void:
 
         ramp.position.z += speed * delta
 
+
         if ramp.position.z > 15.0:
 
             ramp.position.z = -100.0
@@ -692,29 +637,37 @@ func _process(delta: float) -> void:
 
 
     # =========================
-    # ПРОВЕРКА ПОЛОСЫ
+    # ТОЧНЫЙ ЗАЕЗД НА ТРАМПЛИН
     # =========================
 
     if ramp != null:
 
-        if not jumping:
+        if not jumping and not ramp_used:
 
-            if not ramp_used:
+            # Квадроцикл находится около Z = 4.
+            #
+            # Трамплин имеет длину 8 метров.
+            # Его передний край находится примерно
+            # на +4 метра относительно центра.
+            #
+            # Поэтому запуск делаем только тогда,
+            # когда передний край трамплина подходит
+            # непосредственно к квадроциклу.
 
-                # ВАЖНО:
-                # прыжок только на полосе трамплина
+            var ramp_front_z := ramp.position.z + 4.0
 
-                if lane == ramp_lane:
 
-                    if ramp.position.z > -8.0:
+            if lane == ramp_lane:
 
-                        if ramp.position.z < -1.0:
+                if ramp_front_z >= 2.0:
 
-                            _start_jump()
+                    if ramp_front_z <= 5.0:
+
+                        _start_jump()
 
 
     # =========================
-    # JUMP
+    # JUMP PHYSICS
     # =========================
 
     if jumping and player != null:
@@ -759,6 +712,7 @@ func _process(delta: float) -> void:
     if player != null:
 
         var target_x: float = 0.0
+
 
         if lane == 0:
 
@@ -810,6 +764,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
                 var difference: Vector2 = event.position - touch_start
 
+
                 if abs(difference.x) > 80.0:
 
                     if difference.x > 0.0:
@@ -826,6 +781,7 @@ func _unhandled_input(event: InputEvent) -> void:
                             lane - 1
                         )
 
+
                 touch_start = Vector2.ZERO
 
 
@@ -839,12 +795,14 @@ func _unhandled_input(event: InputEvent) -> void:
 
             return
 
+
         if event.keycode == KEY_LEFT:
 
             lane = max(
                 0,
                 lane - 1
             )
+
 
         if event.keycode == KEY_RIGHT:
 
