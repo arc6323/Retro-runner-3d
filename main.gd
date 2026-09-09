@@ -13,7 +13,6 @@ var touch_start: Vector2 = Vector2.ZERO
 
 
 func _ready() -> void:
-	# ФОН
 	var world := WorldEnvironment.new()
 	var env := Environment.new()
 
@@ -23,13 +22,11 @@ func _ready() -> void:
 	world.environment = env
 	add_child(world)
 
-	# СВЕТ
 	var light := DirectionalLight3D.new()
 	light.rotation_degrees = Vector3(-50, -20, 0)
 	light.light_energy = 2.0
 	add_child(light)
 
-	# ДОРОГА
 	var road := MeshInstance3D.new()
 	var road_mesh := BoxMesh.new()
 
@@ -43,7 +40,6 @@ func _ready() -> void:
 	road.material_override = road_material
 	add_child(road)
 
-	# РАЗМЕТКА
 	var line_material := StandardMaterial3D.new()
 	line_material.albedo_color = Color(0.8, 0.8, 0.65)
 
@@ -67,12 +63,10 @@ func _ready() -> void:
 
 	add_child(line_right)
 
-	# КВАДРОЦИКЛ
 	player = Node3D.new()
 	player.position = Vector3(0, 0, 4)
 	add_child(player)
 
-	# КРАСНЫЙ КОРПУС
 	var body := MeshInstance3D.new()
 	var body_mesh := BoxMesh.new()
 
@@ -86,7 +80,6 @@ func _ready() -> void:
 	body.material_override = red
 	player.add_child(body)
 
-	# ЧЁРНОЕ СИДЕНЬЕ
 	var seat := MeshInstance3D.new()
 	var seat_mesh := BoxMesh.new()
 
@@ -100,7 +93,6 @@ func _ready() -> void:
 	seat.material_override = dark
 	player.add_child(seat)
 
-	# КАМЕРА
 	camera = Camera3D.new()
 	camera.position = Vector3(0, 5.5, 11)
 
@@ -113,7 +105,6 @@ func _ready() -> void:
 
 	camera.current = true
 
-	# HUD
 	var canvas := CanvasLayer.new()
 	add_child(canvas)
 
@@ -134,7 +125,7 @@ func _update_hud() -> void:
 	if hud == null:
 		return
 
-	hud.text = "RED QUADRO\n\n🏁 %04d m    ⭐ %05d\n\nСВАЙП ВЛЕВО / ВПРАВО" % [
+	hud.text = "RED QUADRO\n\nDISTANCE: %04d m\nSCORE: %05d" % [
 		int(distance),
 		score
 	]
@@ -169,10 +160,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			touch_start = event.position
 		else:
 			if touch_start != Vector2.ZERO:
-				var delta := event.position - touch_start
+				var difference: Vector2 = event.position - touch_start
 
-				if abs(delta.x) > 80:
-					if delta.x > 0:
+				if abs(difference.x) > 80.0:
+					if difference.x > 0.0:
 						lane = min(2, lane + 1)
 					else:
 						lane = max(0, lane - 1)
