@@ -15,46 +15,68 @@ var score: int = 0
 
 var touch_start: Vector2 = Vector2.ZERO
 
-# Прыжок
-var jumping: bool = false
-var jump_velocity: float = 0.0
-var jump_gravity: float = 24.0
+# ========================================
+# JUMP
+# ========================================
 
-# 0 = левая, 1 = середина, 2 = правая
+var jumping: bool = false
+
+var jump_velocity: float = 0.0
+
+# Более сильная гравитация,
+# но высокий стартовый импульс
+var jump_gravity: float = 22.0
+
+# Трамплин только на средней полосе
+# 0 = левая
+# 1 = середина
+# 2 = правая
 var ramp_lane: int = 1
 
 var ramp_used: bool = false
 
-# Кувырок
+# Прогресс сальто
 var trick_angle: float = 0.0
 
 
 func _ready() -> void:
 
-    # =========================
+    # ========================================
     # HUD
-    # =========================
+    # ========================================
 
     var canvas := CanvasLayer.new()
     add_child(canvas)
 
     hud = Label.new()
+
     hud.position = Vector2(30, 30)
-    hud.add_theme_font_size_override("font_size", 32)
+
+    hud.add_theme_font_size_override(
+        "font_size",
+        32
+    )
+
     hud.text = "RED QUADRO\nBOOT: 1"
 
     canvas.add_child(hud)
 
 
-    # =========================
+    # ========================================
     # WORLD
-    # =========================
+    # ========================================
 
     var world := WorldEnvironment.new()
+
     var env := Environment.new()
 
     env.background_mode = Environment.BG_COLOR
-    env.background_color = Color(0.015, 0.025, 0.06)
+
+    env.background_color = Color(
+        0.015,
+        0.025,
+        0.06
+    )
 
     world.environment = env
 
@@ -63,29 +85,45 @@ func _ready() -> void:
     hud.text = "RED QUADRO\nBOOT: 2"
 
 
-    # =========================
+    # ========================================
     # LIGHT
-    # =========================
+    # ========================================
 
     var light := DirectionalLight3D.new()
 
-    light.rotation_degrees = Vector3(-50, -20, 0)
+    light.rotation_degrees = Vector3(
+        -50,
+        -20,
+        0
+    )
+
     light.light_energy = 2.0
 
     add_child(light)
 
 
-    # =========================
+    # ========================================
     # ROAD
-    # =========================
+    # ========================================
 
     var road := MeshInstance3D.new()
+
     var road_mesh := BoxMesh.new()
 
-    road_mesh.size = Vector3(11, 0.5, 100)
+    road_mesh.size = Vector3(
+        11,
+        0.5,
+        100
+    )
 
     road.mesh = road_mesh
-    road.position = Vector3(0, -0.3, -40)
+
+    road.position = Vector3(
+        0,
+        -0.3,
+        -40
+    )
+
 
     var road_material := StandardMaterial3D.new()
 
@@ -100,9 +138,9 @@ func _ready() -> void:
     add_child(road)
 
 
-    # =========================
+    # ========================================
     # ROAD LINES
-    # =========================
+    # ========================================
 
     var line_material := StandardMaterial3D.new()
 
@@ -114,6 +152,7 @@ func _ready() -> void:
 
 
     var line_left := MeshInstance3D.new()
+
     var line_mesh_left := BoxMesh.new()
 
     line_mesh_left.size = Vector3(
@@ -136,6 +175,7 @@ func _ready() -> void:
 
 
     var line_right := MeshInstance3D.new()
+
     var line_mesh_right := BoxMesh.new()
 
     line_mesh_right.size = Vector3(
@@ -157,9 +197,9 @@ func _ready() -> void:
     add_child(line_right)
 
 
-    # =========================
+    # ========================================
     # QUAD
-    # =========================
+    # ========================================
 
     player = Node3D.new()
 
@@ -172,11 +212,12 @@ func _ready() -> void:
     add_child(player)
 
 
-    # =========================
+    # ========================================
     # QUAD BODY
-    # =========================
+    # ========================================
 
     var body := MeshInstance3D.new()
+
     var body_mesh := BoxMesh.new()
 
     body_mesh.size = Vector3(
@@ -207,11 +248,12 @@ func _ready() -> void:
     player.add_child(body)
 
 
-    # =========================
+    # ========================================
     # SEAT
-    # =========================
+    # ========================================
 
     var seat := MeshInstance3D.new()
+
     var seat_mesh := BoxMesh.new()
 
     seat_mesh.size = Vector3(
@@ -242,30 +284,69 @@ func _ready() -> void:
     player.add_child(seat)
 
 
-    # =========================
+    # ========================================
     # CITY
-    # =========================
+    # ========================================
 
-    _create_building(-9.0, -20.0, 5.0, 16.0, 5.0)
-    _create_building(9.0, -32.0, 5.0, 22.0, 5.0)
+    _create_building(
+        -9.0,
+        -20.0,
+        5.0,
+        16.0,
+        5.0
+    )
 
-    _create_building(-10.0, -50.0, 6.0, 26.0, 6.0)
-    _create_building(10.0, -65.0, 5.0, 18.0, 5.0)
+    _create_building(
+        9.0,
+        -32.0,
+        5.0,
+        22.0,
+        5.0
+    )
 
-    _create_building(-9.0, -82.0, 6.0, 36.0, 6.0)
-    _create_building(10.0, -100.0, 6.0, 28.0, 6.0)
+    _create_building(
+        -10.0,
+        -50.0,
+        6.0,
+        26.0,
+        6.0
+    )
+
+    _create_building(
+        10.0,
+        -65.0,
+        5.0,
+        18.0,
+        5.0
+    )
+
+    _create_building(
+        -9.0,
+        -82.0,
+        6.0,
+        36.0,
+        6.0
+    )
+
+    _create_building(
+        10.0,
+        -100.0,
+        6.0,
+        28.0,
+        6.0
+    )
 
 
-    # =========================
+    # ========================================
     # RAMP
-    # =========================
+    # ========================================
 
     _create_ramp()
 
 
-    # =========================
+    # ========================================
     # CAMERA
-    # =========================
+    # ========================================
 
     camera = Camera3D.new()
 
@@ -285,9 +366,9 @@ func _ready() -> void:
     camera.current = true
 
 
-    # =========================
+    # ========================================
     # READY
-    # =========================
+    # ========================================
 
     hud.text = "RED QUADRO\nBOOT: OK\n\nDISTANCE: 0000 m\nSCORE: 00000"
 
@@ -313,11 +394,12 @@ func _create_building(
     buildings.append(building)
 
 
-    # =========================
+    # ========================================
     # BUILDING BODY
-    # =========================
+    # ========================================
 
     var body := MeshInstance3D.new()
+
     var mesh := BoxMesh.new()
 
     mesh.size = Vector3(
@@ -348,9 +430,9 @@ func _create_building(
     building.add_child(body)
 
 
-    # =========================
+    # ========================================
     # WINDOWS
-    # =========================
+    # ========================================
 
     var window_material := StandardMaterial3D.new()
 
@@ -374,6 +456,7 @@ func _create_building(
     # Передние окна
 
     var windows_front := MeshInstance3D.new()
+
     var windows_front_mesh := BoxMesh.new()
 
     windows_front_mesh.size = Vector3(
@@ -398,6 +481,7 @@ func _create_building(
     # Боковые окна
 
     var windows_side := MeshInstance3D.new()
+
     var windows_side_mesh := BoxMesh.new()
 
     windows_side_mesh.size = Vector3(
@@ -421,30 +505,33 @@ func _create_building(
 
 func _create_ramp() -> void:
 
-    # =========================
-    # RAMP
-    # =========================
+    # ========================================
+    # НОВЫЙ НИЗКИЙ ТРАМПЛИН
+    # ========================================
 
     ramp = Node3D.new()
 
     ramp.position = Vector3(
         0,
         0,
-        -50
+        -55
     )
 
     add_child(ramp)
 
 
-    # Основная поверхность
+    # ========================================
+    # ОСНОВА
+    # ========================================
 
     var ramp_mesh := MeshInstance3D.new()
+
     var ramp_box := BoxMesh.new()
 
     ramp_box.size = Vector3(
         3.0,
-        0.45,
-        8.0
+        0.5,
+        6.0
     )
 
     ramp_mesh.mesh = ramp_box
@@ -455,7 +542,7 @@ func _create_ramp() -> void:
         0
     )
 
-    ramp_mesh.rotation_degrees.x = 10.0
+    ramp_mesh.rotation_degrees.x = 12.0
 
 
     var ramp_material := StandardMaterial3D.new()
@@ -481,15 +568,18 @@ func _create_ramp() -> void:
     ramp.add_child(ramp_mesh)
 
 
-    # Левый борт
+    # ========================================
+    # ЛЕВЫЙ БОРТ
+    # ========================================
 
     var side_left := MeshInstance3D.new()
+
     var side_left_mesh := BoxMesh.new()
 
     side_left_mesh.size = Vector3(
-        0.25,
-        0.7,
-        8.0
+        0.22,
+        0.55,
+        6.0
     )
 
     side_left.mesh = side_left_mesh
@@ -500,22 +590,25 @@ func _create_ramp() -> void:
         0
     )
 
-    side_left.rotation_degrees.x = 10.0
+    side_left.rotation_degrees.x = 12.0
 
     side_left.material_override = ramp_material
 
     ramp.add_child(side_left)
 
 
-    # Правый борт
+    # ========================================
+    # ПРАВЫЙ БОРТ
+    # ========================================
 
     var side_right := MeshInstance3D.new()
+
     var side_right_mesh := BoxMesh.new()
 
     side_right_mesh.size = Vector3(
-        0.25,
-        0.7,
-        8.0
+        0.22,
+        0.55,
+        6.0
     )
 
     side_right.mesh = side_right_mesh
@@ -526,20 +619,23 @@ func _create_ramp() -> void:
         0
     )
 
-    side_right.rotation_degrees.x = 10.0
+    side_right.rotation_degrees.x = 12.0
 
     side_right.material_override = ramp_material
 
     ramp.add_child(side_right)
 
 
-    # Неон
+    # ========================================
+    # НЕОН
+    # ========================================
 
     var neon := MeshInstance3D.new()
+
     var neon_mesh := BoxMesh.new()
 
     neon_mesh.size = Vector3(
-        2.5,
+        2.4,
         0.08,
         0.18
     )
@@ -548,11 +644,11 @@ func _create_ramp() -> void:
 
     neon.position = Vector3(
         0,
-        0.6,
-        3.2
+        0.75,
+        2.1
     )
 
-    neon.rotation_degrees.x = 10.0
+    neon.rotation_degrees.x = 12.0
 
 
     var neon_material := StandardMaterial3D.new()
@@ -585,7 +681,11 @@ func _start_jump() -> void:
 
     jumping = true
 
-    jump_velocity = 12.0
+    # ========================================
+    # СИЛЬНЫЙ ВЗЛЁТ
+    # ========================================
+
+    jump_velocity = 17.0
 
     trick_angle = 0.0
 
@@ -596,18 +696,18 @@ func _start_jump() -> void:
 
 func _process(delta: float) -> void:
 
-    # =========================
+    # ========================================
     # DISTANCE
-    # =========================
+    # ========================================
 
     distance += speed * delta
 
     score = int(distance)
 
 
-    # =========================
+    # ========================================
     # CITY MOVEMENT
-    # =========================
+    # ========================================
 
     for building in buildings:
 
@@ -620,14 +720,13 @@ func _process(delta: float) -> void:
                 building.position.z -= 130.0
 
 
-    # =========================
+    # ========================================
     # RAMP MOVEMENT
-    # =========================
+    # ========================================
 
     if ramp != null:
 
         ramp.position.z += speed * delta
-
 
         if ramp.position.z > 15.0:
 
@@ -636,59 +735,70 @@ func _process(delta: float) -> void:
             ramp_used = false
 
 
-    # =========================
-    # ТОЧНЫЙ ЗАЕЗД НА ТРАМПЛИН
-    # =========================
+    # ========================================
+    # ТОЧКА КОНТАКТА
+    # ========================================
 
     if ramp != null:
 
-        if not jumping and not ramp_used:
+        if not jumping:
 
-            # Квадроцикл находится около Z = 4.
-            #
-            # Трамплин имеет длину 8 метров.
-            # Его передний край находится примерно
-            # на +4 метра относительно центра.
-            #
-            # Поэтому запуск делаем только тогда,
-            # когда передний край трамплина подходит
-            # непосредственно к квадроциклу.
+            if not ramp_used:
 
-            var ramp_front_z := ramp.position.z + 4.0
+                # Передний край трамплина
+                # подходит непосредственно
+                # к квадроциклу
+
+                var ramp_front_z := (
+                    ramp.position.z + 3.0
+                )
 
 
-            if lane == ramp_lane:
+                # Только средняя полоса
 
-                if ramp_front_z >= 2.0:
+                if lane == ramp_lane:
 
-                    if ramp_front_z <= 5.0:
+                    if ramp_front_z >= 3.0:
 
-                        _start_jump()
+                        if ramp_front_z <= 4.5:
+
+                            _start_jump()
 
 
-    # =========================
-    # JUMP PHYSICS
-    # =========================
+    # ========================================
+    # JUMP
+    # ========================================
 
     if jumping and player != null:
 
-        jump_velocity -= jump_gravity * delta
+        # Гравитация
 
-        player.position.y += jump_velocity * delta
+        jump_velocity -= (
+            jump_gravity * delta
+        )
+
+        # Вертикальное движение
+
+        player.position.y += (
+            jump_velocity * delta
+        )
 
 
-        # =========================
-        # FRONT FLIP
-        # =========================
+        # ====================================
+        # ПЕРЕДНЕЕ САЛЬТО
+        # ====================================
 
-        trick_angle += 360.0 * delta
+        trick_angle += (
+            360.0 * delta
+        )
 
-        player.rotation_degrees.x = trick_angle
+        # Минус = кувырок вперёд
+        player.rotation_degrees.x = -trick_angle
 
 
-        # =========================
+        # ====================================
         # LANDING
-        # =========================
+        # ====================================
 
         if player.position.y <= 0.0:
 
@@ -702,12 +812,15 @@ func _process(delta: float) -> void:
 
             score += 100
 
-            hud.text = "RED QUADRO\n\nTRICK +100"
+            hud.text = (
+                "RED QUADRO\n\n"
+                "FRONT FLIP +100"
+            )
 
 
-    # =========================
+    # ========================================
     # LANES
-    # =========================
+    # ========================================
 
     if player != null:
 
@@ -730,27 +843,37 @@ func _process(delta: float) -> void:
         player.position.x = lerp(
             player.position.x,
             target_x,
-            min(1.0, delta * 8.0)
+            min(
+                1.0,
+                delta * 8.0
+            )
         )
 
 
-    # =========================
+    # ========================================
     # HUD
-    # =========================
+    # ========================================
 
-    if hud != null and not jumping:
+    if hud != null:
 
-        hud.text = "RED QUADRO\nBOOT: OK\n\nDISTANCE: %04d m\nSCORE: %05d" % [
-            int(distance),
-            int(score)
-        ]
+        if not jumping:
+
+            hud.text = (
+                "RED QUADRO\n"
+                "BOOT: OK\n\n"
+                "DISTANCE: %04d m\n"
+                "SCORE: %05d"
+            ) % [
+                int(distance),
+                int(score)
+            ]
 
 
 func _unhandled_input(event: InputEvent) -> void:
 
-    # =========================
+    # ========================================
     # TOUCH
-    # =========================
+    # ========================================
 
     if event is InputEventScreenTouch:
 
@@ -762,7 +885,9 @@ func _unhandled_input(event: InputEvent) -> void:
 
             if touch_start != Vector2.ZERO:
 
-                var difference: Vector2 = event.position - touch_start
+                var difference: Vector2 = (
+                    event.position - touch_start
+                )
 
 
                 if abs(difference.x) > 80.0:
@@ -785,9 +910,9 @@ func _unhandled_input(event: InputEvent) -> void:
                 touch_start = Vector2.ZERO
 
 
-    # =========================
+    # ========================================
     # KEYBOARD
-    # =========================
+    # ========================================
 
     elif event is InputEventKey:
 
