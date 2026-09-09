@@ -23,6 +23,12 @@ var jumping: bool = false
 var jump_velocity: float = 0.0
 var jump_gravity: float = 24.0
 
+# Трамплин находится на средней полосе
+# 0 = левая
+# 1 = середина
+# 2 = правая
+var ramp_lane: int = 1
+
 var ramp_used: bool = false
 var trick_angle: float = 0.0
 
@@ -40,6 +46,7 @@ func _ready() -> void:
     hud.position = Vector2(30, 30)
     hud.add_theme_font_size_override("font_size", 32)
     hud.text = "RED QUADRO\nBOOT: 1"
+
     canvas.add_child(hud)
 
 
@@ -54,6 +61,7 @@ func _ready() -> void:
     env.background_color = Color(0.015, 0.025, 0.06)
 
     world.environment = env
+
     add_child(world)
 
     hud.text = "RED QUADRO\nBOOT: 2"
@@ -79,11 +87,17 @@ func _ready() -> void:
     var road_mesh := BoxMesh.new()
 
     road_mesh.size = Vector3(11, 0.5, 100)
+
     road.mesh = road_mesh
     road.position = Vector3(0, -0.3, -40)
 
     var road_material := StandardMaterial3D.new()
-    road_material.albedo_color = Color(0.12, 0.13, 0.16)
+
+    road_material.albedo_color = Color(
+        0.12,
+        0.13,
+        0.16
+    )
 
     road.material_override = road_material
 
@@ -95,69 +109,141 @@ func _ready() -> void:
     # =========================
 
     var line_material := StandardMaterial3D.new()
-    line_material.albedo_color = Color(0.8, 0.8, 0.65)
 
+    line_material.albedo_color = Color(
+        0.8,
+        0.8,
+        0.65
+    )
+
+
+    # Левая линия
 
     var line_left := MeshInstance3D.new()
     var line_mesh_left := BoxMesh.new()
 
-    line_mesh_left.size = Vector3(0.12, 0.03, 100)
+    line_mesh_left.size = Vector3(
+        0.12,
+        0.03,
+        100
+    )
+
     line_left.mesh = line_mesh_left
-    line_left.position = Vector3(-1.75, 0, -40)
+
+    line_left.position = Vector3(
+        -1.75,
+        0,
+        -40
+    )
+
     line_left.material_override = line_material
 
     add_child(line_left)
 
 
+    # Правая линия
+
     var line_right := MeshInstance3D.new()
     var line_mesh_right := BoxMesh.new()
 
-    line_mesh_right.size = Vector3(0.12, 0.03, 100)
+    line_mesh_right.size = Vector3(
+        0.12,
+        0.03,
+        100
+    )
+
     line_right.mesh = line_mesh_right
-    line_right.position = Vector3(1.75, 0, -40)
+
+    line_right.position = Vector3(
+        1.75,
+        0,
+        -40
+    )
+
     line_right.material_override = line_material
 
     add_child(line_right)
 
 
     # =========================
-    # QUAD
+    # QUADRO
     # =========================
 
     player = Node3D.new()
-    player.position = Vector3(0, 0, 4)
+
+    player.position = Vector3(
+        0,
+        0,
+        4
+    )
 
     add_child(player)
 
 
-    # Корпус
+    # =========================
+    # QUAD BODY
+    # =========================
 
     var body := MeshInstance3D.new()
     var body_mesh := BoxMesh.new()
 
-    body_mesh.size = Vector3(2.5, 0.7, 3.0)
+    body_mesh.size = Vector3(
+        2.5,
+        0.7,
+        3.0
+    )
+
     body.mesh = body_mesh
-    body.position = Vector3(0, 0.8, 0)
+
+    body.position = Vector3(
+        0,
+        0.8,
+        0
+    )
+
 
     var red := StandardMaterial3D.new()
-    red.albedo_color = Color(0.9, 0.03, 0.04)
+
+    red.albedo_color = Color(
+        0.9,
+        0.03,
+        0.04
+    )
 
     body.material_override = red
 
     player.add_child(body)
 
 
-    # Сиденье
+    # =========================
+    # SEAT
+    # =========================
 
     var seat := MeshInstance3D.new()
     var seat_mesh := BoxMesh.new()
 
-    seat_mesh.size = Vector3(1.3, 0.35, 1.3)
+    seat_mesh.size = Vector3(
+        1.3,
+        0.35,
+        1.3
+    )
+
     seat.mesh = seat_mesh
-    seat.position = Vector3(0, 1.35, 0)
+
+    seat.position = Vector3(
+        0,
+        1.35,
+        0
+    )
+
 
     var dark := StandardMaterial3D.new()
-    dark.albedo_color = Color(0.03, 0.03, 0.04)
+
+    dark.albedo_color = Color(
+        0.03,
+        0.03,
+        0.04
+    )
 
     seat.material_override = dark
 
@@ -230,7 +316,11 @@ func _ready() -> void:
 
     camera = Camera3D.new()
 
-    camera.position = Vector3(0, 5.5, 11)
+    camera.position = Vector3(
+        0,
+        5.5,
+        11
+    )
 
     add_child(camera)
 
@@ -259,9 +349,14 @@ func _create_building(
 
     var building := Node3D.new()
 
-    building.position = Vector3(x, 0, z)
+    building.position = Vector3(
+        x,
+        0,
+        z
+    )
 
     add_child(building)
+
     buildings.append(building)
 
 
@@ -313,6 +408,7 @@ func _create_building(
     )
 
     window_material.emission_enabled = true
+
     window_material.emission = Color(
         0.8,
         0.4,
@@ -322,7 +418,7 @@ func _create_building(
     window_material.emission_energy_multiplier = 1.5
 
 
-    # Передняя полоса окон
+    # Передние окна
 
     var windows_front := MeshInstance3D.new()
     var windows_front_mesh := BoxMesh.new()
@@ -346,7 +442,7 @@ func _create_building(
     building.add_child(windows_front)
 
 
-    # Боковая полоса окон
+    # Боковые окна
 
     var windows_side := MeshInstance3D.new()
     var windows_side_mesh := BoxMesh.new()
@@ -373,7 +469,8 @@ func _create_building(
 func _create_ramp() -> void:
 
     # =========================
-    # НИЗКИЙ ТРАМПЛИН
+    # RAMP
+    # Только средняя полоса
     # =========================
 
     ramp = Node3D.new()
@@ -387,13 +484,15 @@ func _create_ramp() -> void:
     add_child(ramp)
 
 
-    # Основная поверхность
+    # =========================
+    # ОСНОВА ТРАМПЛИНА
+    # =========================
 
     var ramp_mesh := MeshInstance3D.new()
     var ramp_box := BoxMesh.new()
 
     ramp_box.size = Vector3(
-        6.0,
+        3.0,
         0.45,
         8.0
     )
@@ -406,7 +505,6 @@ func _create_ramp() -> void:
         0
     )
 
-    # Небольшой наклон
     ramp_mesh.rotation_degrees.x = 10.0
 
 
@@ -434,17 +532,8 @@ func _create_ramp() -> void:
 
 
     # =========================
-    # БОКОВЫЕ БОРТА
+    # ЛЕВЫЙ БОРТ
     # =========================
-
-    var side_material := StandardMaterial3D.new()
-
-    side_material.albedo_color = Color(
-        0.25,
-        0.02,
-        0.02
-    )
-
 
     var side_left := MeshInstance3D.new()
     var side_left_mesh := BoxMesh.new()
@@ -458,17 +547,21 @@ func _create_ramp() -> void:
     side_left.mesh = side_left_mesh
 
     side_left.position = Vector3(
-        -3.0,
+        -1.5,
         0.45,
         0
     )
 
     side_left.rotation_degrees.x = 10.0
 
-    side_left.material_override = side_material
+    side_left.material_override = ramp_material
 
     ramp.add_child(side_left)
 
+
+    # =========================
+    # ПРАВЫЙ БОРТ
+    # =========================
 
     var side_right := MeshInstance3D.new()
     var side_right_mesh := BoxMesh.new()
@@ -482,27 +575,27 @@ func _create_ramp() -> void:
     side_right.mesh = side_right_mesh
 
     side_right.position = Vector3(
-        3.0,
+        1.5,
         0.45,
         0
     )
 
     side_right.rotation_degrees.x = 10.0
 
-    side_right.material_override = side_material
+    side_right.material_override = ramp_material
 
     ramp.add_child(side_right)
 
 
     # =========================
-    # НЕОНОВАЯ ПОЛОСА
+    # НЕОН
     # =========================
 
     var neon := MeshInstance3D.new()
     var neon_mesh := BoxMesh.new()
 
     neon_mesh.size = Vector3(
-        5.5,
+        2.5,
         0.08,
         0.18
     )
@@ -527,6 +620,7 @@ func _create_ramp() -> void:
     )
 
     neon_material.emission_enabled = true
+
     neon_material.emission = Color(
         1.0,
         0.05,
@@ -568,7 +662,7 @@ func _process(delta: float) -> void:
 
 
     # =========================
-    # CITY MOVEMENT
+    # CITY
     # =========================
 
     for building in buildings:
@@ -598,22 +692,29 @@ func _process(delta: float) -> void:
 
 
     # =========================
-    # START JUMP
+    # ПРОВЕРКА ПОЛОСЫ
     # =========================
 
     if ramp != null:
-        if not jumping and not ramp_used:
 
-            # Трамплин подходит к игроку
+        if not jumping:
 
-            if ramp.position.z > -8.0:
-                if ramp.position.z < -1.0:
+            if not ramp_used:
 
-                    _start_jump()
+                # ВАЖНО:
+                # прыжок только на полосе трамплина
+
+                if lane == ramp_lane:
+
+                    if ramp.position.z > -8.0:
+
+                        if ramp.position.z < -1.0:
+
+                            _start_jump()
 
 
     # =========================
-    # JUMP PHYSICS
+    # JUMP
     # =========================
 
     if jumping and player != null:
@@ -713,11 +814,17 @@ func _unhandled_input(event: InputEvent) -> void:
 
                     if difference.x > 0.0:
 
-                        lane = min(2, lane + 1)
+                        lane = min(
+                            2,
+                            lane + 1
+                        )
 
                     else:
 
-                        lane = max(0, lane - 1)
+                        lane = max(
+                            0,
+                            lane - 1
+                        )
 
                 touch_start = Vector2.ZERO
 
@@ -734,8 +841,14 @@ func _unhandled_input(event: InputEvent) -> void:
 
         if event.keycode == KEY_LEFT:
 
-            lane = max(0, lane - 1)
+            lane = max(
+                0,
+                lane - 1
+            )
 
         if event.keycode == KEY_RIGHT:
 
-            lane = min(2, lane + 1)
+            lane = min(
+                2,
+                lane + 1
+            )
