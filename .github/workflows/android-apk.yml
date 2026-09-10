@@ -100,6 +100,12 @@ jobs:
       - name: Validate project invariants
         run: ./validate_project.sh
 
+      - name: Run gameplay smoke test
+        run: |
+          xvfb-run -a godot \
+            --path . \
+            --script res://tests/gameplay_smoke.gd
+
       - name: Build APK
         env:
           GODOT_ANDROID_KEYSTORE_DEBUG_PATH: ${{ github.workspace }}/build/debug.keystore

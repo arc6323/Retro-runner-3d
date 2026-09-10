@@ -2,6 +2,7 @@
 .godot/
 .import/
 *.tmp
+*.import
 
 # Build artifacts
 build/

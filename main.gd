@@ -1,860 +1,705 @@
 extends Node3D
 
-enum GameState { RUNNING, PAUSED, GAME_OVER }
+enum GameState { ROADSIDE_IDLE, MOUNTING, MERGING, RUNNING, PAUSED, GAME_OVER }
 
 const LANE_X := [-3.5, 0.0, 3.5]
-const SWIPE_THRESHOLD := 80.0
+const SWIPE_THRESHOLD := 70.0
+const DOUBLE_TAP_WINDOW := 0.32
 const TRICK_BONUS := 100
+const BASE_SPEED := 11.0
+const BOOST_SPEED := 18.0
+const CAMERA_CHASE := Vector3(0.0, 5.5, 11.0)
+const CAMERA_RAMP := Vector3(0.0, 7.0, 15.5)
 
+var game_state := GameState.ROADSIDE_IDLE
 var player: CharacterBody3D
+var vehicle_visual: Node3D
+var wolf: Node3D
+var wolf_head: Node3D
+var scarf_tail: Node3D
 var camera: Camera3D
+var world_pivot: Node3D
 var hud: Label
+var title: Label
+var prompt: Label
 
 var buildings: Array[Node3D] = []
+var traffic: Array[Node3D] = []
+var wheels: Array[MeshInstance3D] = []
+var front_wheel_pivots: Array[Node3D] = []
 var ramp: Node3D
+var ramp_lane := 1
+var ramp_used := false
 
-var speed: float = 10.0
-var lane: int = 1
+var lane := 1
+var distance := 0.0
+var score := 0
+var trick_score := 0
+var jumping := false
+var jump_velocity := 0.0
+var jump_gravity := 24.0
+var trick_requested := false
+var trick_angle := 0.0
+var boost_remaining := 0.0
 
-var distance: float = 0.0
-var score: int = 0
-var trick_score: int = 0
-var game_state := GameState.RUNNING
-
-var touch_start: Vector2 = Vector2.ZERO
-
-# Прыжок
-var jumping: bool = false
-var jump_velocity: float = 0.0
-var jump_gravity: float = 24.0
-
-# 0 = левая, 1 = середина, 2 = правая
-var ramp_lane: int = 1
-
-var ramp_used: bool = false
-
-# Кувырок
-var trick_angle: float = 0.0
-var trick_requested: bool = false
+var touch_start := Vector2.ZERO
+var touch_active := false
+var last_tap_time := -10.0
+var elapsed_time := 0.0
+var transition_time := 0.0
+var steer_visual := 0.0
+var message_time := 0.0
 
 
 func _ready() -> void:
-
-    # =========================
-    # HUD
-    # =========================
-
-    var canvas := CanvasLayer.new()
-    add_child(canvas)
-
-    hud = Label.new()
-    hud.position = Vector2(30, 30)
-    hud.add_theme_font_size_override("font_size", 32)
-    hud.text = "RED QUADRO\nBOOT: 1"
-
-    canvas.add_child(hud)
+    _create_environment()
+    _create_world()
+    _create_player()
+    _create_camera()
+    _create_interface()
+    _enter_roadside_idle()
 
 
-    # =========================
-    # WORLD
-    # =========================
-
+func _create_environment() -> void:
     var world := WorldEnvironment.new()
     var env := Environment.new()
-
     env.background_mode = Environment.BG_COLOR
-    env.background_color = Color(0.015, 0.025, 0.06)
-
+    env.background_color = Color("06172a")
+    env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+    env.ambient_light_color = Color("456aa0")
+    env.ambient_light_energy = 0.65
     world.environment = env
-
     add_child(world)
 
-    hud.text = "RED QUADRO\nBOOT: 2"
-
-
-    # =========================
-    # LIGHT
-    # =========================
-
-    var light := DirectionalLight3D.new()
-
-    light.rotation_degrees = Vector3(-50, -20, 0)
-    light.light_energy = 2.0
-
-    add_child(light)
-
-
-    # =========================
-    # ROAD
-    # =========================
-
-    var road := MeshInstance3D.new()
-    var road_mesh := BoxMesh.new()
-
-    road_mesh.size = Vector3(11, 0.5, 100)
-
-    road.mesh = road_mesh
-    road.position = Vector3(0, -0.3, -40)
-
-    var road_material := StandardMaterial3D.new()
-
-    road_material.albedo_color = Color(
-        0.12,
-        0.13,
-        0.16
-    )
-
-    road.material_override = road_material
-
-    add_child(road)
-
-    var road_body := StaticBody3D.new()
-    var road_collision := CollisionShape3D.new()
-    var road_shape := BoxShape3D.new()
-    road_shape.size = road_mesh.size
-    road_collision.shape = road_shape
-    road_body.position = road.position
-    road_body.add_child(road_collision)
-    add_child(road_body)
-
-
-    # =========================
-    # ROAD LINES
-    # =========================
-
-    var line_material := StandardMaterial3D.new()
-
-    line_material.albedo_color = Color(
-        0.8,
-        0.8,
-        0.65
-    )
-
-
-    var line_left := MeshInstance3D.new()
-    var line_mesh_left := BoxMesh.new()
-
-    line_mesh_left.size = Vector3(
-        0.12,
-        0.03,
-        100
-    )
-
-    line_left.mesh = line_mesh_left
-
-    line_left.position = Vector3(
-        -1.75,
-        0,
-        -40
-    )
-
-    line_left.material_override = line_material
-
-    add_child(line_left)
-
-
-    var line_right := MeshInstance3D.new()
-    var line_mesh_right := BoxMesh.new()
-
-    line_mesh_right.size = Vector3(
-        0.12,
-        0.03,
-        100
-    )
-
-    line_right.mesh = line_mesh_right
-
-    line_right.position = Vector3(
-        1.75,
-        0,
-        -40
-    )
-
-    line_right.material_override = line_material
-
-    add_child(line_right)
-
-
-    # =========================
-    # QUAD
-    # =========================
-
-    player = CharacterBody3D.new()
-
-    player.position = Vector3(
-        0,
-        0,
-        4
-    )
-
-    add_child(player)
-
-    var player_collision := CollisionShape3D.new()
-    var player_shape := BoxShape3D.new()
-    player_shape.size = Vector3(2.2, 1.6, 2.6)
-    player_collision.shape = player_shape
-    player_collision.position = Vector3(0, 0.8, 0)
-    player.add_child(player_collision)
-
-
-    # =========================
-    # QUAD BODY
-    # =========================
-
-    var body := MeshInstance3D.new()
-    var body_mesh := BoxMesh.new()
-
-    body_mesh.size = Vector3(
-        2.5,
-        0.7,
-        3.0
-    )
-
-    body.mesh = body_mesh
-
-    body.position = Vector3(
-        0,
-        0.8,
-        0
-    )
-
-
-    var red := StandardMaterial3D.new()
-
-    red.albedo_color = Color(
-        0.9,
-        0.03,
-        0.04
-    )
-
-    body.material_override = red
-
-    player.add_child(body)
-
-
-    # =========================
-    # SEAT
-    # =========================
-
-    var seat := MeshInstance3D.new()
-    var seat_mesh := BoxMesh.new()
-
-    seat_mesh.size = Vector3(
-        1.3,
-        0.35,
-        1.3
-    )
-
-    seat.mesh = seat_mesh
-
-    seat.position = Vector3(
-        0,
-        1.35,
-        0
-    )
-
-
-    var dark := StandardMaterial3D.new()
-
-    dark.albedo_color = Color(
-        0.03,
-        0.03,
-        0.04
-    )
-
-    seat.material_override = dark
-
-    player.add_child(seat)
-
-
-    # =========================
-    # CITY
-    # =========================
-
-    _create_building(-9.0, -20.0, 5.0, 16.0, 5.0)
-    _create_building(9.0, -32.0, 5.0, 22.0, 5.0)
-
-    _create_building(-10.0, -50.0, 6.0, 26.0, 6.0)
-    _create_building(10.0, -65.0, 5.0, 18.0, 5.0)
-
-    _create_building(-9.0, -82.0, 6.0, 36.0, 6.0)
-    _create_building(10.0, -100.0, 6.0, 28.0, 6.0)
-
-
-    # =========================
-    # RAMP
-    # =========================
+    var moonlight := DirectionalLight3D.new()
+    moonlight.rotation_degrees = Vector3(-52, -22, 0)
+    moonlight.light_color = Color("b9d9ff")
+    moonlight.light_energy = 1.8
+    add_child(moonlight)
+
+
+func _create_world() -> void:
+    world_pivot = Node3D.new()
+    world_pivot.name = "WorldPivot"
+    add_child(world_pivot)
+
+    _create_road()
+
+    var building_specs := [
+        [-9.0, -18.0, 5.0, 16.0, 5.0],
+        [9.0, -30.0, 5.0, 22.0, 5.0],
+        [-10.0, -48.0, 6.0, 27.0, 6.0],
+        [10.0, -63.0, 5.0, 19.0, 5.0],
+        [-9.0, -80.0, 6.0, 34.0, 6.0],
+        [10.0, -98.0, 6.0, 28.0, 6.0],
+    ]
+    for spec in building_specs:
+        _create_building(spec[0], spec[1], spec[2], spec[3], spec[4])
 
     _create_ramp()
+    _create_traffic()
 
 
-    # =========================
-    # CAMERA
-    # =========================
+func _create_road() -> void:
+    var road := _box(Vector3(11, 0.5, 120), Vector3(0, -0.3, -48), Color("171c2b"))
+    world_pivot.add_child(road)
 
-    camera = Camera3D.new()
+    var edge_material := Color("16d9f4")
+    var left_edge := _box(Vector3(0.12, 0.08, 120), Vector3(-5.3, 0.02, -48), edge_material, edge_material)
+    var right_edge := _box(Vector3(0.12, 0.08, 120), Vector3(5.3, 0.02, -48), edge_material, edge_material)
+    world_pivot.add_child(left_edge)
+    world_pivot.add_child(right_edge)
 
-    camera.position = Vector3(
-        0,
-        5.5,
-        11
-    )
-
-    add_child(camera)
-
-    camera.look_at(
-        Vector3(0, 1, 0),
-        Vector3.UP
-    )
-
-    camera.current = true
+    for x in [-1.75, 1.75]:
+        for z in range(-104, 14, 6):
+            var marker := _box(Vector3(0.11, 0.04, 3.0), Vector3(x, 0.01, float(z)), Color("d8f4ff"), Color("62d8ff"))
+            world_pivot.add_child(marker)
 
 
-    # =========================
-    # READY
-    # =========================
-
-    hud.text = "RED QUADRO\nBOOT: OK\n\nDISTANCE: 0000 m\nSCORE: 00000"
-
-
-func _create_building(
-    x: float,
-    z: float,
-    width: float,
-    building_height: float,
-    depth: float
-) -> void:
-
+func _create_building(x: float, z: float, width: float, height: float, depth: float) -> void:
     var building := Node3D.new()
-
-    building.position = Vector3(
-        x,
-        0,
-        z
-    )
-
-    add_child(building)
-
+    building.position = Vector3(x, 0, z)
+    world_pivot.add_child(building)
     buildings.append(building)
 
-
-    # =========================
-    # BUILDING BODY
-    # =========================
-
-    var body := MeshInstance3D.new()
-    var mesh := BoxMesh.new()
-
-    mesh.size = Vector3(
-        width,
-        building_height,
-        depth
-    )
-
-    body.mesh = mesh
-
-    body.position = Vector3(
-        0,
-        building_height / 2.0,
-        0
-    )
-
-
-    var material := StandardMaterial3D.new()
-
-    material.albedo_color = Color(
-        0.06,
-        0.09,
-        0.16
-    )
-
-    body.material_override = material
-
+    var body := _box(Vector3(width, height, depth), Vector3(0, height * 0.5, 0), Color("09172d"))
     building.add_child(body)
 
-    var building_body := StaticBody3D.new()
-    var building_collision := CollisionShape3D.new()
-    var building_shape := BoxShape3D.new()
-    building_shape.size = mesh.size
-    building_collision.shape = building_shape
-    building_collision.position = body.position
-    building_body.add_child(building_collision)
-    building.add_child(building_body)
-
-
-    # =========================
-    # WINDOWS
-    # =========================
-
-    var window_material := StandardMaterial3D.new()
-
-    window_material.albedo_color = Color(
-        0.95,
-        0.65,
-        0.15
-    )
-
-    window_material.emission_enabled = true
-
-    window_material.emission = Color(
-        0.8,
-        0.4,
-        0.05
-    )
-
-    window_material.emission_energy_multiplier = 1.5
-
-
-    # Передние окна
-
-    var windows_front := MeshInstance3D.new()
-    var windows_front_mesh := BoxMesh.new()
-
-    windows_front_mesh.size = Vector3(
-        width * 0.65,
-        building_height * 0.55,
-        0.08
-    )
-
-    windows_front.mesh = windows_front_mesh
-
-    windows_front.position = Vector3(
-        0,
-        building_height * 0.55,
-        depth / 2.0 + 0.05
-    )
-
-    windows_front.material_override = window_material
-
-    building.add_child(windows_front)
-
-
-    # Боковые окна
-
-    var windows_side := MeshInstance3D.new()
-    var windows_side_mesh := BoxMesh.new()
-
-    windows_side_mesh.size = Vector3(
-        0.08,
-        building_height * 0.55,
-        depth * 0.65
-    )
-
-    windows_side.mesh = windows_side_mesh
-
-    windows_side.position = Vector3(
-        width / 2.0 + 0.05,
-        building_height * 0.55,
-        0
-    )
-
-    windows_side.material_override = window_material
-
-    building.add_child(windows_side)
+    var glow := Color("e72bcb") if x < 0 else Color("16d9f4")
+    for row in range(2, int(height), 3):
+        var windows := _box(
+            Vector3(width * 0.72, 0.3, 0.08),
+            Vector3(0, float(row), depth * 0.5 + 0.05),
+            glow,
+            glow
+        )
+        building.add_child(windows)
 
 
 func _create_ramp() -> void:
-
-    # =========================
-    # RAMP
-    # =========================
-
     ramp = Node3D.new()
+    ramp.name = "Ramp"
+    ramp.position = Vector3(LANE_X[ramp_lane], 0, -55)
+    world_pivot.add_child(ramp)
 
-    ramp.position = Vector3(
-        0,
-        0,
-        -50
-    )
-
-    add_child(ramp)
-
-
-    # Основная поверхность
-
-    var ramp_mesh := MeshInstance3D.new()
-    var ramp_box := BoxMesh.new()
-
-    ramp_box.size = Vector3(
-        3.0,
-        0.45,
-        8.0
-    )
-
-    ramp_mesh.mesh = ramp_box
-
-    ramp_mesh.position = Vector3(
-        0,
-        0.35,
-        0
-    )
-
+    var ramp_color := Color("d92132")
+    var ramp_mesh := _box(Vector3(3.0, 0.45, 8.0), Vector3(0, 0.35, 0), ramp_color)
     ramp_mesh.rotation_degrees.x = 10.0
-
-
-    var ramp_material := StandardMaterial3D.new()
-
-    ramp_material.albedo_color = Color(
-        0.75,
-        0.05,
-        0.03
-    )
-
-    ramp_material.emission_enabled = true
-
-    ramp_material.emission = Color(
-        0.35,
-        0.01,
-        0.01
-    )
-
-    ramp_material.emission_energy_multiplier = 1.0
-
-    ramp_mesh.material_override = ramp_material
-
     ramp.add_child(ramp_mesh)
 
-    var ramp_body := StaticBody3D.new()
-    var ramp_collision := CollisionShape3D.new()
-    var ramp_shape := BoxShape3D.new()
-    ramp_shape.size = ramp_box.size
-    ramp_collision.shape = ramp_shape
-    ramp_collision.position = ramp_mesh.position
-    ramp_collision.rotation_degrees = ramp_mesh.rotation_degrees
-    ramp_body.add_child(ramp_collision)
-    ramp.add_child(ramp_body)
+    for x in [-1.48, 1.48]:
+        var rail := _box(Vector3(0.18, 0.65, 8.0), Vector3(x, 0.48, 0), Color("16d9f4"), Color("16d9f4"))
+        rail.rotation_degrees.x = 10.0
+        ramp.add_child(rail)
+
+    for z in [-2.4, -0.8, 0.8, 2.4]:
+        var arrow := _box(Vector3(2.1, 0.07, 0.22), Vector3(0, 0.62, z), Color("16d9f4"), Color("16d9f4"))
+        arrow.rotation_degrees.x = 10.0
+        ramp.add_child(arrow)
 
 
-    # Левый борт
-
-    var side_left := MeshInstance3D.new()
-    var side_left_mesh := BoxMesh.new()
-
-    side_left_mesh.size = Vector3(
-        0.25,
-        0.7,
-        8.0
-    )
-
-    side_left.mesh = side_left_mesh
-
-    side_left.position = Vector3(
-        -1.5,
-        0.45,
-        0
-    )
-
-    side_left.rotation_degrees.x = 10.0
-
-    side_left.material_override = ramp_material
-
-    ramp.add_child(side_left)
+func _create_traffic() -> void:
+    var specs := [[0, -28.0, Color("30384a")], [2, -50.0, Color("ad2334")], [0, -76.0, Color("233d6b")]]
+    for spec in specs:
+        var car := Node3D.new()
+        car.position = Vector3(LANE_X[spec[0]], 0, spec[1])
+        car.set_meta("lane", spec[0])
+        car.add_child(_box(Vector3(2.1, 0.8, 3.7), Vector3(0, 0.65, 0), spec[2]))
+        car.add_child(_box(Vector3(1.6, 0.6, 1.8), Vector3(0, 1.25, 0.2), Color("101827")))
+        var tail_left := _box(Vector3(0.45, 0.16, 0.08), Vector3(-0.62, 0.75, 1.88), Color("ff304f"), Color("ff304f"))
+        var tail_right := _box(Vector3(0.45, 0.16, 0.08), Vector3(0.62, 0.75, 1.88), Color("ff304f"), Color("ff304f"))
+        car.add_child(tail_left)
+        car.add_child(tail_right)
+        world_pivot.add_child(car)
+        traffic.append(car)
 
 
-    # Правый борт
+func _create_player() -> void:
+    player = CharacterBody3D.new()
+    player.name = "PlayerAnchor"
+    player.position = Vector3(-4.2, 0, 4)
+    add_child(player)
 
-    var side_right := MeshInstance3D.new()
-    var side_right_mesh := BoxMesh.new()
+    var collision := CollisionShape3D.new()
+    var shape := BoxShape3D.new()
+    shape.size = Vector3(2.35, 1.7, 2.8)
+    collision.shape = shape
+    collision.position = Vector3(0, 0.9, 0)
+    player.add_child(collision)
 
-    side_right_mesh.size = Vector3(
-        0.25,
-        0.7,
-        8.0
-    )
+    vehicle_visual = Node3D.new()
+    vehicle_visual.name = "QuadVisual"
+    player.add_child(vehicle_visual)
+    _build_quad(vehicle_visual)
 
-    side_right.mesh = side_right_mesh
-
-    side_right.position = Vector3(
-        1.5,
-        0.45,
-        0
-    )
-
-    side_right.rotation_degrees.x = 10.0
-
-    side_right.material_override = ramp_material
-
-    ramp.add_child(side_right)
+    wolf = Node3D.new()
+    wolf.name = "RedWolf"
+    player.add_child(wolf)
+    _build_wolf(wolf)
 
 
-    # Неон
+func _build_quad(parent: Node3D) -> void:
+    parent.add_child(_box(Vector3(2.4, 0.58, 2.8), Vector3(0, 0.78, 0), Color("d51f32")))
+    parent.add_child(_box(Vector3(1.25, 0.32, 1.3), Vector3(0, 1.22, 0.28), Color("10131c")))
+    parent.add_child(_box(Vector3(1.7, 0.18, 0.5), Vector3(0, 1.05, -1.25), Color("ee3347")))
+    parent.add_child(_box(Vector3(1.0, 0.22, 0.12), Vector3(0, 1.18, -1.53), Color("bff8ff"), Color("16d9f4")))
 
-    var neon := MeshInstance3D.new()
-    var neon_mesh := BoxMesh.new()
+    for is_front in [true, false]:
+        var z := -1.12 if is_front else 1.12
+        for side in [-1.0, 1.0]:
+            var pivot := Node3D.new()
+            pivot.position = Vector3(side * 1.22, 0.52, z)
+            parent.add_child(pivot)
+            if is_front:
+                front_wheel_pivots.append(pivot)
+            var wheel := _cylinder(0.46, 0.38, Vector3.ZERO, Color("08090c"))
+            wheel.rotation_degrees.z = 90
+            pivot.add_child(wheel)
+            wheels.append(wheel)
 
-    neon_mesh.size = Vector3(
-        2.5,
-        0.08,
-        0.18
-    )
-
-    neon.mesh = neon_mesh
-
-    neon.position = Vector3(
-        0,
-        0.6,
-        3.2
-    )
-
-    neon.rotation_degrees.x = 10.0
-
-
-    var neon_material := StandardMaterial3D.new()
-
-    neon_material.albedo_color = Color(
-        1.0,
-        0.15,
-        0.02
-    )
-
-    neon_material.emission_enabled = true
-
-    neon_material.emission = Color(
-        1.0,
-        0.05,
-        0.01
-    )
-
-    neon_material.emission_energy_multiplier = 2.0
-
-    neon.material_override = neon_material
-
-    ramp.add_child(neon)
+    var handlebar := _box(Vector3(1.6, 0.08, 0.08), Vector3(0, 1.55, -0.55), Color("242b37"))
+    parent.add_child(handlebar)
 
 
-func _start_jump() -> void:
+func _build_wolf(parent: Node3D) -> void:
+    var fur := Color("69727e")
+    var light_fur := Color("b8bec4")
+    var dark := Color("141923")
+    var red := Color("c91f32")
 
-    if jumping:
+    var torso := _box(Vector3(0.85, 1.45, 0.52), Vector3(0, 2.45, 0.15), dark)
+    torso.rotation_degrees.x = -8
+    parent.add_child(torso)
+
+    wolf_head = Node3D.new()
+    wolf_head.position = Vector3(0, 3.45, -0.08)
+    parent.add_child(wolf_head)
+    wolf_head.add_child(_sphere(Vector3(0.48, 0.55, 0.48), Vector3.ZERO, fur))
+    wolf_head.add_child(_box(Vector3(0.43, 0.28, 0.48), Vector3(0, -0.12, -0.42), light_fur))
+    wolf_head.add_child(_sphere(Vector3(0.13, 0.11, 0.12), Vector3(0, -0.12, -0.68), Color("090b0e")))
+    _add_ear(wolf_head, -0.28, fur)
+    _add_ear(wolf_head, 0.28, fur)
+    _add_eye(wolf_head, -0.18)
+    _add_eye(wolf_head, 0.18)
+
+    for side in [-1.0, 1.0]:
+        var arm := _cylinder(0.14, 1.25, Vector3(side * 0.53, 2.2, -0.18), fur)
+        arm.rotation_degrees.z = side * 18
+        arm.rotation_degrees.x = -50
+        parent.add_child(arm)
+        var leg := _cylinder(0.18, 1.15, Vector3(side * 0.28, 1.15, 0.15), dark)
+        leg.rotation_degrees.x = 72
+        parent.add_child(leg)
+
+    var scarf_band := _cylinder(0.38, 0.26, Vector3(0, 3.03, 0.02), red)
+    parent.add_child(scarf_band)
+    scarf_tail = _box(Vector3(0.32, 1.8, 0.09), Vector3(-0.5, 3.0, 0.65), red)
+    scarf_tail.rotation_degrees = Vector3(70, 0, -28)
+    parent.add_child(scarf_tail)
+
+    var tail := _cylinder(0.24, 1.4, Vector3(0, 1.85, 0.88), fur)
+    tail.rotation_degrees.x = 58
+    parent.add_child(tail)
+
+
+func _add_ear(parent: Node3D, x: float, color: Color) -> void:
+    var ear := _box(Vector3(0.25, 0.48, 0.18), Vector3(x, 0.48, 0), color)
+    ear.rotation_degrees.z = -12 if x < 0 else 12
+    parent.add_child(ear)
+
+
+func _add_eye(parent: Node3D, x: float) -> void:
+    parent.add_child(_sphere(Vector3(0.08, 0.07, 0.045), Vector3(x, 0.08, -0.44), Color("ffc83d"), Color("ffc83d")))
+
+
+func _create_camera() -> void:
+    camera = Camera3D.new()
+    camera.name = "CameraRig"
+    camera.position = Vector3(-2.5, 5.1, 11.5)
+    camera.fov = 68.0
+    camera.current = true
+    add_child(camera)
+    camera.look_at(player.position + Vector3(0, 1.8, 0), Vector3.UP)
+
+
+func _create_interface() -> void:
+    var canvas := CanvasLayer.new()
+    add_child(canvas)
+
+    title = Label.new()
+    title.position = Vector2(0, 105)
+    title.size = Vector2(720, 150)
+    title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    title.add_theme_font_size_override("font_size", 56)
+    title.add_theme_color_override("font_color", Color("16d9f4"))
+    title.add_theme_color_override("font_shadow_color", Color("e72bcb"))
+    title.add_theme_constant_override("shadow_offset_x", 4)
+    title.add_theme_constant_override("shadow_offset_y", 4)
+    title.text = "НЕОНОВАЯ\nПУСТОШЬ"
+    canvas.add_child(title)
+
+    prompt = Label.new()
+    prompt.position = Vector2(30, 1410)
+    prompt.size = Vector2(660, 90)
+    prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    prompt.add_theme_font_size_override("font_size", 25)
+    prompt.add_theme_color_override("font_color", Color("f2faff"))
+    prompt.text = "КОСНИСЬ ГЕРОЯ, ЧТОБЫ НАЧАТЬ"
+    canvas.add_child(prompt)
+
+    hud = Label.new()
+    hud.position = Vector2(26, 32)
+    hud.size = Vector2(668, 120)
+    hud.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    hud.add_theme_font_size_override("font_size", 28)
+    hud.add_theme_color_override("font_color", Color("f2faff"))
+    hud.visible = false
+    canvas.add_child(hud)
+
+
+func _enter_roadside_idle() -> void:
+    game_state = GameState.ROADSIDE_IDLE
+    transition_time = 0.0
+    lane = 1
+    world_pivot.position.x = 0.0
+    player.position = Vector3(-4.2, 0, 4)
+    vehicle_visual.rotation = Vector3.ZERO
+    wolf.position = Vector3(-1.3, 0, 0.2)
+    wolf.rotation_degrees = Vector3(0, -12, 0)
+    title.visible = true
+    prompt.visible = true
+    hud.visible = false
+
+
+func _begin_start_sequence() -> void:
+    if game_state != GameState.ROADSIDE_IDLE:
         return
-
-    jumping = true
-
-    jump_velocity = 12.0
-
-    trick_angle = 0.0
-
-    ramp_used = true
-
-    hud.text = "RED QUADRO\n\nJUMP!"
+    game_state = GameState.MOUNTING
+    transition_time = 0.0
+    prompt.text = "ВЫХОДИМ НА ТРАССУ..."
 
 
 func _physics_process(delta: float) -> void:
+    elapsed_time += delta
+    _animate_living_wolf(delta)
 
-    if game_state != GameState.RUNNING:
+    if game_state == GameState.PAUSED:
         return
 
-    # =========================
-    # DISTANCE
-    # =========================
+    if game_state == GameState.ROADSIDE_IDLE:
+        _move_traffic(delta, 7.0, false)
+        _update_camera(delta)
+        return
 
-    distance += speed * delta
+    if game_state == GameState.MOUNTING:
+        _update_mounting(delta)
+        _move_traffic(delta, 7.0, false)
+        _update_camera(delta)
+        return
 
+    if game_state == GameState.MERGING:
+        _update_merging(delta)
+        _move_traffic(delta, 9.0, false)
+        _update_camera(delta)
+        return
+
+    if game_state == GameState.GAME_OVER:
+        _update_camera(delta)
+        return
+
+    _update_running(delta)
+
+
+func _animate_living_wolf(delta: float) -> void:
+    if wolf == null:
+        return
+    if game_state == GameState.ROADSIDE_IDLE:
+        wolf.position.y = sin(elapsed_time * 1.7) * 0.035
+        wolf.rotation_degrees.z = sin(elapsed_time * 0.7) * 1.5
+        wolf_head.rotation_degrees.y = sin(elapsed_time * 0.48) * 9.0
+        wolf_head.rotation_degrees.x = sin(elapsed_time * 0.9) * 2.0
+        scarf_tail.rotation_degrees.z = -28.0 + sin(elapsed_time * 3.2) * 8.0
+    else:
+        wolf.position.y = lerpf(wolf.position.y, 0.0, min(1.0, delta * 8.0))
+        wolf_head.rotation_degrees.y = lerpf(wolf_head.rotation_degrees.y, 0.0, min(1.0, delta * 7.0))
+        scarf_tail.rotation_degrees.z = -38.0 + sin(elapsed_time * 8.0) * 10.0
+
+
+func _update_mounting(delta: float) -> void:
+    transition_time += delta
+    var t: float = clampf(transition_time / 0.85, 0.0, 1.0)
+    var eased: float = smoothstep(0.0, 1.0, t)
+    wolf.position = Vector3(-1.3, 0, 0.2).lerp(Vector3(0, 0, 0), eased)
+    wolf.rotation_degrees.y = lerpf(-12.0, 0.0, eased)
+    wolf.rotation_degrees.x = -sin(t * PI) * 22.0
+    if t >= 1.0:
+        game_state = GameState.MERGING
+        transition_time = 0.0
+        title.visible = false
+        prompt.visible = false
+
+
+func _update_merging(delta: float) -> void:
+    transition_time += delta
+    var t: float = clampf(transition_time / 1.15, 0.0, 1.0)
+    var eased: float = smoothstep(0.0, 1.0, t)
+    player.position.x = lerpf(-4.2, 0.0, eased)
+    vehicle_visual.rotation_degrees.z = -sin(t * PI) * 8.0
+    if t >= 1.0:
+        game_state = GameState.RUNNING
+        vehicle_visual.rotation_degrees.z = 0.0
+        hud.visible = true
+        _show_message("ПОЕХАЛИ!", 1.0)
+
+
+func _update_running(delta: float) -> void:
+    var current_speed: float = BOOST_SPEED if boost_remaining > 0.0 else BASE_SPEED
+    boost_remaining = max(0.0, boost_remaining - delta)
+    distance += current_speed * delta
     score = int(distance) + trick_score
 
-
-    # =========================
-    # CITY MOVEMENT
-    # =========================
-
     for building in buildings:
+        building.position.z += current_speed * delta
+        if building.position.z > 18.0:
+            building.position.z -= 130.0
 
-        if building != null:
+    ramp.position.z += current_speed * delta
+    if ramp.position.z > 17.0:
+        ramp.position.z = -105.0
+        ramp_lane = (ramp_lane + 1) % 3
+        ramp.position.x = LANE_X[ramp_lane]
+        ramp_used = false
 
-            building.position.z += speed * delta
-
-            if building.position.z > 15.0:
-
-                building.position.z -= 130.0
-
-
-    # =========================
-    # RAMP MOVEMENT
-    # =========================
-
-    if ramp != null:
-
-        ramp.position.z += speed * delta
-
-
-        if ramp.position.z > 15.0:
-
-            ramp.position.z = -100.0
-
-            ramp_used = false
+    _move_traffic(delta, current_speed * 0.88, true)
+    _update_world_shift(delta)
+    _update_jump(delta)
+    _spin_wheels(delta, current_speed)
+    _update_camera(delta)
+    _update_hud(delta)
 
 
-    # =========================
-    # ТОЧНЫЙ ЗАЕЗД НА ТРАМПЛИН
-    # =========================
-
-    if ramp != null:
-
-        if not jumping and not ramp_used:
-
-            # Квадроцикл находится около Z = 4.
-            #
-            # Трамплин имеет длину 8 метров.
-            # Его передний край находится примерно
-            # на +4 метра относительно центра.
-            #
-            # Поэтому запуск делаем только тогда,
-            # когда передний край трамплина подходит
-            # непосредственно к квадроциклу.
-
-            var ramp_front_z := ramp.position.z + 4.0
+func _move_traffic(delta: float, movement_speed: float, check_collision: bool) -> void:
+    for car in traffic:
+        car.position.z += movement_speed * delta
+        if car.position.z > 18.0:
+            car.position.z -= 92.0
+            var next_lane := (int(car.get_meta("lane")) + 1) % 3
+            car.set_meta("lane", next_lane)
+            car.position.x = LANE_X[next_lane]
+        if check_collision and not jumping:
+            var car_lane := int(car.get_meta("lane"))
+            if car_lane == lane and car.position.z > 1.6 and car.position.z < 6.2:
+                _game_over()
 
 
-            if lane == ramp_lane:
+func _update_world_shift(delta: float) -> void:
+    var target_x: float = -float(LANE_X[lane])
+    var error: float = target_x - world_pivot.position.x
+    world_pivot.position.x = lerpf(world_pivot.position.x, target_x, min(1.0, delta * 8.5))
 
-                if ramp_front_z >= 2.0:
+    var desired_steer: float = clampf(-error / 3.5, -1.0, 1.0) * 24.0
+    steer_visual = lerpf(steer_visual, desired_steer, min(1.0, delta * 12.0))
+    if abs(error) < 0.03:
+        steer_visual = lerpf(steer_visual, 0.0, min(1.0, delta * 10.0))
 
-                    if ramp_front_z <= 5.0:
-
-                        _start_jump()
-
-
-    # =========================
-    # JUMP PHYSICS
-    # =========================
-
-    if jumping and player != null:
-
-        jump_velocity -= jump_gravity * delta
-
-        player.position.y += jump_velocity * delta
+    for pivot in front_wheel_pivots:
+        pivot.rotation_degrees.y = steer_visual
+    vehicle_visual.rotation_degrees.z = -steer_visual * 0.18
+    wolf.rotation_degrees.z = -steer_visual * 0.24
 
 
-        # =========================
-        # FRONT FLIP
-        # =========================
+func _update_jump(delta: float) -> void:
+    if not jumping and not ramp_used and lane == ramp_lane:
+        var ramp_front_z := ramp.position.z + 4.0
+        if ramp_front_z >= 2.0 and ramp_front_z <= 5.0:
+            _start_jump()
 
-        var trick_speed := 540.0 if trick_requested else 360.0
-        trick_angle += trick_speed * delta
+    if not jumping:
+        return
 
-        player.rotation_degrees.x = trick_angle
+    jump_velocity -= jump_gravity * delta
+    player.position.y += jump_velocity * delta
+    var trick_speed := 560.0 if trick_requested else 300.0
+    trick_angle += trick_speed * delta
+    vehicle_visual.rotation_degrees.x = trick_angle
+    wolf.rotation_degrees.x = trick_angle
 
-
-        # =========================
-        # LANDING
-        # =========================
-
-        if player.position.y <= 0.0:
-
-            player.position.y = 0.0
-
-            jumping = false
-
-            jump_velocity = 0.0
-            trick_requested = false
-
-            player.rotation_degrees = Vector3.ZERO
-
+    if player.position.y <= 0.0:
+        player.position.y = 0.0
+        jumping = false
+        jump_velocity = 0.0
+        vehicle_visual.rotation_degrees.x = 0.0
+        wolf.rotation_degrees.x = 0.0
+        if trick_requested:
             trick_score += TRICK_BONUS
-            score = int(distance) + trick_score
-
-            hud.text = "RED QUADRO\n\nTRICK +100"
-
-
-    # =========================
-    # LANES
-    # =========================
-
-    if player != null:
-
-        var target_x: float = LANE_X[lane]
+            _show_message("ТРЮК +100", 1.2)
+        else:
+            _show_message("МЯГКОЕ ПРИЗЕМЛЕНИЕ", 0.8)
+        trick_requested = false
 
 
-        player.position.x = lerp(
-            player.position.x,
-            target_x,
-            min(1.0, delta * 8.0)
-        )
+func _start_jump() -> void:
+    if jumping or game_state != GameState.RUNNING:
+        return
+    jumping = true
+    jump_velocity = 12.0
+    trick_angle = 0.0
+    ramp_used = true
+    _show_message("ПРЫЖОК!", 0.7)
 
 
-    # =========================
-    # HUD
-    # =========================
+func _spin_wheels(delta: float, current_speed: float) -> void:
+    for wheel in wheels:
+        wheel.rotate_x(current_speed * delta * 1.7)
 
-    if hud != null and not jumping:
 
-        hud.text = "RED QUADRO\nBOOT: OK\n\nDISTANCE: %04d m\nSCORE: %05d" % [
-            int(distance),
-            int(score)
-        ]
+func _update_camera(delta: float) -> void:
+    var target_position := CAMERA_CHASE
+    var target_fov := 70.0
+    var target_look := player.position + Vector3(0, 1.4, -2.0)
+
+    if game_state == GameState.ROADSIDE_IDLE or game_state == GameState.MOUNTING:
+        target_position = Vector3(-2.3, 5.2, 11.6)
+        target_fov = 64.0
+        target_look = player.position + Vector3(-0.45, 1.8, 0)
+    elif game_state == GameState.MERGING:
+        target_position = CAMERA_CHASE
+        target_fov = 70.0
+    elif jumping or _ramp_is_close():
+        target_position = CAMERA_RAMP
+        target_fov = 79.0
+
+    camera.position = camera.position.lerp(target_position, min(1.0, delta * 3.5))
+    camera.fov = lerpf(camera.fov, target_fov, min(1.0, delta * 3.2))
+    camera.look_at(target_look, Vector3.UP)
+
+
+func _ramp_is_close() -> bool:
+    if ramp == null or ramp_used or lane != ramp_lane:
+        return false
+    var front_z := ramp.position.z + 4.0
+    return front_z > -11.0 and front_z < 5.0
+
+
+func _update_hud(delta: float) -> void:
+    message_time = max(0.0, message_time - delta)
+    if message_time > 0.0:
+        return
+    var boost_text := "  •  УСКОРЕНИЕ" if boost_remaining > 0.0 else ""
+    hud.text = "ДИСТАНЦИЯ %04d м     СЧЁТ %05d%s" % [int(distance), score, boost_text]
+
+
+func _show_message(text: String, duration: float) -> void:
+    hud.text = text
+    message_time = duration
+
+
+func _game_over() -> void:
+    game_state = GameState.GAME_OVER
+    hud.text = "СТОЛКНОВЕНИЕ\nСЧЁТ %05d\n\nКОСНИСЬ ЭКРАНА — ЕЩЁ РАЗ" % score
 
 
 func _unhandled_input(event: InputEvent) -> void:
+    if event.is_action_pressed("pause") and game_state in [GameState.RUNNING, GameState.PAUSED]:
+        game_state = GameState.RUNNING if game_state == GameState.PAUSED else GameState.PAUSED
+        hud.text = "ПРОДОЛЖИТЬ — КОСНИСЬ ЭКРАНА" if game_state == GameState.PAUSED else "ПОЕХАЛИ!"
+        return
 
-    # =========================
-    # TOUCH
-    # =========================
+    if event.is_action_pressed("restart"):
+        _reset_run()
+        return
+
+    if event.is_action_pressed("move_left") and game_state == GameState.RUNNING:
+        lane = max(0, lane - 1)
+        return
+    if event.is_action_pressed("move_right") and game_state == GameState.RUNNING:
+        lane = min(2, lane + 1)
+        return
+    if event.is_action_pressed("trick") and game_state == GameState.RUNNING:
+        if jumping:
+            trick_requested = true
+        else:
+            _start_jump()
+        return
 
     if event is InputEventScreenTouch:
-
-        if event.pressed:
-
-            touch_start = event.position
-
-        else:
-
-            if touch_start != Vector2.ZERO:
-
-                var difference: Vector2 = event.position - touch_start
+        _handle_pointer(event.position, event.pressed)
+    elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+        _handle_pointer(event.position, event.pressed)
 
 
-                if abs(difference.x) > SWIPE_THRESHOLD:
+func _handle_pointer(position: Vector2, pressed: bool) -> void:
+    if pressed:
+        touch_start = position
+        touch_active = true
+        return
 
-                    if difference.x > 0.0:
+    if not touch_active:
+        return
+    touch_active = false
+    var difference := position - touch_start
 
-                        lane = min(
-                            2,
-                            lane + 1
-                        )
-
-                    else:
-
-                        lane = max(
-                            0,
-                            lane - 1
-                        )
-
-
-                touch_start = Vector2.ZERO
-
-
-    # =========================
-    # ACTION INPUT
-    # =========================
-
-    elif event.is_action_pressed("move_left"):
-        lane = max(0, lane - 1)
-
-    elif event.is_action_pressed("move_right"):
-        lane = min(2, lane + 1)
-
-    elif event.is_action_pressed("trick"):
-        trick_requested = true
-
-    elif event.is_action_pressed("pause"):
-        game_state = GameState.RUNNING if game_state == GameState.PAUSED else GameState.PAUSED
-        hud.text = "RED QUADRO\n\nPAUSED" if game_state == GameState.PAUSED else "RED QUADRO\n\nRESUMED"
-
-    elif event.is_action_pressed("restart"):
+    if game_state == GameState.ROADSIDE_IDLE:
+        if _hero_was_tapped(position):
+            _begin_start_sequence()
+        return
+    if game_state == GameState.PAUSED:
+        game_state = GameState.RUNNING
+        return
+    if game_state == GameState.GAME_OVER:
         _reset_run()
+        return
+    if game_state != GameState.RUNNING:
+        return
+
+    if abs(difference.x) > SWIPE_THRESHOLD and abs(difference.x) > abs(difference.y):
+        lane = clampi(lane + (1 if difference.x > 0 else -1), 0, 2)
+    elif difference.y < -SWIPE_THRESHOLD:
+        _start_jump()
+    elif difference.length() < 34.0:
+        _handle_tap()
+
+
+func _hero_was_tapped(screen_position: Vector2) -> bool:
+    if camera.is_position_behind(wolf.global_position):
+        return false
+    var hero_screen := camera.unproject_position(wolf.global_position + Vector3(0, 2.0, 0))
+    return hero_screen.distance_to(screen_position) < 210.0
+
+
+func _handle_tap() -> void:
+    var now := Time.get_ticks_msec() / 1000.0
+    if jumping:
+        trick_requested = true
+        _show_message("ТРЮК!", 0.45)
+    elif now - last_tap_time <= DOUBLE_TAP_WINDOW:
+        boost_remaining = 1.35
+        _show_message("УСКОРЕНИЕ!", 0.65)
+        last_tap_time = -10.0
+    else:
+        last_tap_time = now
 
 
 func _reset_run() -> void:
     distance = 0.0
     trick_score = 0
     score = 0
-    lane = 1
     jumping = false
     jump_velocity = 0.0
-    trick_angle = 0.0
     trick_requested = false
-    game_state = GameState.RUNNING
-    player.position = Vector3(0, 0, 4)
-    player.rotation = Vector3.ZERO
-    ramp.position.z = -50.0
+    trick_angle = 0.0
+    boost_remaining = 0.0
+    ramp_lane = 1
+    ramp.position = Vector3(LANE_X[ramp_lane], 0, -55)
+    ramp_used = false
     for index in buildings.size():
-        buildings[index].position.z = -20.0 - index * 15.0
+        buildings[index].position.z = -18.0 - index * 16.0
+    for index in traffic.size():
+        var car_lane := index % 3
+        traffic[index].set_meta("lane", car_lane)
+        traffic[index].position = Vector3(LANE_X[car_lane], 0, -30.0 - index * 24.0)
+    _enter_roadside_idle()
+
+
+func _material(color: Color, emission: Color = Color(0, 0, 0, 1)) -> StandardMaterial3D:
+    var material := StandardMaterial3D.new()
+    material.albedo_color = color
+    if emission.r > 0.0 or emission.g > 0.0 or emission.b > 0.0:
+        material.emission_enabled = true
+        material.emission = emission
+        material.emission_energy_multiplier = 1.8
+    return material
+
+
+func _box(size: Vector3, position: Vector3, color: Color, emission: Color = Color(0, 0, 0, 1)) -> MeshInstance3D:
+    var node := MeshInstance3D.new()
+    var mesh := BoxMesh.new()
+    mesh.size = size
+    node.mesh = mesh
+    node.position = position
+    node.material_override = _material(color, emission)
+    return node
+
+
+func _sphere(scale_value: Vector3, position: Vector3, color: Color, emission: Color = Color(0, 0, 0, 1)) -> MeshInstance3D:
+    var node := MeshInstance3D.new()
+    var mesh := SphereMesh.new()
+    mesh.height = 1.0
+    mesh.radius = 0.5
+    node.mesh = mesh
+    node.scale = scale_value
+    node.position = position
+    node.material_override = _material(color, emission)
+    return node
+
+
+func _cylinder(radius: float, height: float, position: Vector3, color: Color) -> MeshInstance3D:
+    var node := MeshInstance3D.new()
+    var mesh := CylinderMesh.new()
+    mesh.top_radius = radius
+    mesh.bottom_radius = radius
+    mesh.height = height
+    node.mesh = mesh
+    node.position = position
+    node.material_override = _material(color)
+    return node
