@@ -10,11 +10,16 @@ const BASE_SPEED := 11.0
 const BOOST_SPEED := 18.0
 const CAMERA_CHASE := Vector3(0.0, 5.5, 11.0)
 const CAMERA_RAMP := Vector3(0.0, 7.0, 15.5)
+const WOLF_STANDING_SCENE: PackedScene = preload("res://assets/models/red_wolf_standing.glb")
+const WOLF_RIDING_SCENE: PackedScene = preload("res://assets/models/red_wolf_riding.glb")
+const STREET_QUAD_SCENE: PackedScene = preload("res://assets/models/street_quad.glb")
 
 var game_state := GameState.ROADSIDE_IDLE
 var player: CharacterBody3D
 var vehicle_visual: Node3D
 var wolf: Node3D
+var wolf_standing: Node3D
+var wolf_riding: Node3D
 var wolf_head: Node3D
 var scarf_tail: Node3D
 var camera: Camera3D
@@ -25,7 +30,7 @@ var prompt: Label
 
 var buildings: Array[Node3D] = []
 var traffic: Array[Node3D] = []
-var wheels: Array[MeshInstance3D] = []
+var wheel_spin_pivots: Array[Node3D] = []
 var front_wheel_pivots: Array[Node3D] = []
 var ramp: Node3D
 var ramp_lane := 1
@@ -187,89 +192,47 @@ func _create_player() -> void:
     collision.position = Vector3(0, 0.9, 0)
     player.add_child(collision)
 
-    vehicle_visual = Node3D.new()
-    vehicle_visual.name = "QuadVisual"
+    vehicle_visual = STREET_QUAD_SCENE.instantiate() as Node3D
+    vehicle_visual.name = "StreetQuad"
+    vehicle_visual.scale = Vector3.ONE * 0.92
+    vehicle_visual.rotation_degrees.y = 180.0
     player.add_child(vehicle_visual)
-    _build_quad(vehicle_visual)
 
-    wolf = Node3D.new()
-    wolf.name = "RedWolf"
-    player.add_child(wolf)
-    _build_wolf(wolf)
+    wolf_standing = WOLF_STANDING_SCENE.instantiate() as Node3D
+    wolf_standing.name = "RedWolfStanding"
+    wolf_standing.scale = Vector3.ONE * 0.78
+    player.add_child(wolf_standing)
 
+    wolf_riding = WOLF_RIDING_SCENE.instantiate() as Node3D
+    wolf_riding.name = "RedWolfRiding"
+    wolf_riding.scale = Vector3.ONE * 0.78
+    wolf_riding.rotation_degrees.y = 180.0
+    player.add_child(wolf_riding)
 
-func _build_quad(parent: Node3D) -> void:
-    parent.add_child(_box(Vector3(2.4, 0.58, 2.8), Vector3(0, 0.78, 0), Color("d51f32")))
-    parent.add_child(_box(Vector3(1.25, 0.32, 1.3), Vector3(0, 1.22, 0.28), Color("10131c")))
-    parent.add_child(_box(Vector3(1.7, 0.18, 0.5), Vector3(0, 1.05, -1.25), Color("ee3347")))
-    parent.add_child(_box(Vector3(1.0, 0.22, 0.12), Vector3(0, 1.18, -1.53), Color("bff8ff"), Color("16d9f4")))
-
-    for is_front in [true, false]:
-        var z := -1.12 if is_front else 1.12
-        for side in [-1.0, 1.0]:
-            var pivot := Node3D.new()
-            pivot.position = Vector3(side * 1.22, 0.52, z)
-            parent.add_child(pivot)
-            if is_front:
-                front_wheel_pivots.append(pivot)
-            var wheel := _cylinder(0.46, 0.38, Vector3.ZERO, Color("08090c"))
-            wheel.rotation_degrees.z = 90
-            pivot.add_child(wheel)
-            wheels.append(wheel)
-
-    var handlebar := _box(Vector3(1.6, 0.08, 0.08), Vector3(0, 1.55, -0.55), Color("242b37"))
-    parent.add_child(handlebar)
+    _set_active_wolf(wolf_standing)
+    _connect_vehicle_parts()
 
 
-func _build_wolf(parent: Node3D) -> void:
-    var fur := Color("69727e")
-    var light_fur := Color("b8bec4")
-    var dark := Color("141923")
-    var red := Color("c91f32")
-
-    var torso := _box(Vector3(0.85, 1.45, 0.52), Vector3(0, 2.45, 0.15), dark)
-    torso.rotation_degrees.x = -8
-    parent.add_child(torso)
-
-    wolf_head = Node3D.new()
-    wolf_head.position = Vector3(0, 3.45, -0.08)
-    parent.add_child(wolf_head)
-    wolf_head.add_child(_sphere(Vector3(0.48, 0.55, 0.48), Vector3.ZERO, fur))
-    wolf_head.add_child(_box(Vector3(0.43, 0.28, 0.48), Vector3(0, -0.12, -0.42), light_fur))
-    wolf_head.add_child(_sphere(Vector3(0.13, 0.11, 0.12), Vector3(0, -0.12, -0.68), Color("090b0e")))
-    _add_ear(wolf_head, -0.28, fur)
-    _add_ear(wolf_head, 0.28, fur)
-    _add_eye(wolf_head, -0.18)
-    _add_eye(wolf_head, 0.18)
-
-    for side in [-1.0, 1.0]:
-        var arm := _cylinder(0.14, 1.25, Vector3(side * 0.53, 2.2, -0.18), fur)
-        arm.rotation_degrees.z = side * 18
-        arm.rotation_degrees.x = -50
-        parent.add_child(arm)
-        var leg := _cylinder(0.18, 1.15, Vector3(side * 0.28, 1.15, 0.15), dark)
-        leg.rotation_degrees.x = 72
-        parent.add_child(leg)
-
-    var scarf_band := _cylinder(0.38, 0.26, Vector3(0, 3.03, 0.02), red)
-    parent.add_child(scarf_band)
-    scarf_tail = _box(Vector3(0.32, 1.8, 0.09), Vector3(-0.5, 3.0, 0.65), red)
-    scarf_tail.rotation_degrees = Vector3(70, 0, -28)
-    parent.add_child(scarf_tail)
-
-    var tail := _cylinder(0.24, 1.4, Vector3(0, 1.85, 0.88), fur)
-    tail.rotation_degrees.x = 58
-    parent.add_child(tail)
+func _set_active_wolf(active_wolf: Node3D) -> void:
+    wolf = active_wolf
+    wolf_standing.visible = active_wolf == wolf_standing
+    wolf_riding.visible = active_wolf == wolf_riding
+    wolf_head = wolf.find_child("HeadPivot", true, false) as Node3D
+    scarf_tail = wolf.find_child("ScarfTailPivot", true, false) as Node3D
 
 
-func _add_ear(parent: Node3D, x: float, color: Color) -> void:
-    var ear := _box(Vector3(0.25, 0.48, 0.18), Vector3(x, 0.48, 0), color)
-    ear.rotation_degrees.z = -12 if x < 0 else 12
-    parent.add_child(ear)
+func _connect_vehicle_parts() -> void:
+    front_wheel_pivots.clear()
+    wheel_spin_pivots.clear()
+    for pivot_name in ["WheelFrontLeftPivot", "WheelFrontRightPivot"]:
+        var pivot := vehicle_visual.find_child(pivot_name, true, false) as Node3D
+        if pivot != null:
+            front_wheel_pivots.append(pivot)
+    for spin_name in ["WheelFrontLeftSpin", "WheelFrontRightSpin", "WheelRearLeftSpin", "WheelRearRightSpin"]:
+        var spin := vehicle_visual.find_child(spin_name, true, false) as Node3D
+        if spin != null:
+            wheel_spin_pivots.append(spin)
 
-
-func _add_eye(parent: Node3D, x: float) -> void:
-    parent.add_child(_sphere(Vector3(0.08, 0.07, 0.045), Vector3(x, 0.08, -0.44), Color("ffc83d"), Color("ffc83d")))
 
 
 func _create_camera() -> void:
@@ -323,9 +286,12 @@ func _enter_roadside_idle() -> void:
     lane = 1
     world_pivot.position.x = 0.0
     player.position = Vector3(-4.2, 0, 4)
-    vehicle_visual.rotation = Vector3.ZERO
-    wolf.position = Vector3(-1.3, 0, 0.2)
+    vehicle_visual.rotation_degrees = Vector3(0, 180, 0)
+    _set_active_wolf(wolf_standing)
+    wolf.position = Vector3(-1.55, 0, 0.22)
     wolf.rotation_degrees = Vector3(0, -12, 0)
+    wolf_riding.position = Vector3.ZERO
+    wolf_riding.rotation_degrees = Vector3(0, 180, 0)
     title.visible = true
     prompt.visible = true
     hud.visible = false
@@ -389,12 +355,22 @@ func _update_mounting(delta: float) -> void:
     transition_time += delta
     var t: float = clampf(transition_time / 0.85, 0.0, 1.0)
     var eased: float = smoothstep(0.0, 1.0, t)
-    wolf.position = Vector3(-1.3, 0, 0.2).lerp(Vector3(0, 0, 0), eased)
-    wolf.rotation_degrees.y = lerpf(-12.0, 0.0, eased)
-    wolf.rotation_degrees.x = -sin(t * PI) * 22.0
+    if t < 0.42:
+        var mount_phase: float = smoothstep(0.0, 0.42, t)
+        wolf_standing.position = Vector3(-1.55, 0, 0.22).lerp(Vector3(-0.45, 0.58, 0.02), mount_phase)
+        wolf_standing.rotation_degrees.y = lerpf(-12.0, 0.0, mount_phase)
+        wolf_standing.rotation_degrees.x = -sin(mount_phase * PI) * 18.0
+    else:
+        if wolf != wolf_riding:
+            _set_active_wolf(wolf_riding)
+        var landing_phase: float = smoothstep(0.42, 1.0, t)
+        wolf_riding.position = Vector3(0, 0.46, 0.0).lerp(Vector3(0, 0.02, 0), landing_phase)
+        wolf_riding.rotation_degrees.x = -sin(landing_phase * PI) * 8.0
     if t >= 1.0:
         game_state = GameState.MERGING
         transition_time = 0.0
+        wolf_riding.position = Vector3.ZERO
+        wolf_riding.rotation_degrees = Vector3(0, 180, 0)
         title.visible = false
         prompt.visible = false
 
@@ -509,8 +485,8 @@ func _start_jump() -> void:
 
 
 func _spin_wheels(delta: float, current_speed: float) -> void:
-    for wheel in wheels:
-        wheel.rotate_x(current_speed * delta * 1.7)
+    for spin_pivot in wheel_spin_pivots:
+        spin_pivot.rotate_x(current_speed * delta * 1.7)
 
 
 func _update_camera(delta: float) -> void:

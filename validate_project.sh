@@ -10,6 +10,13 @@ grep -q 'pivot.rotation_degrees.y = steer_visual' main.gd
 grep -q 'target_position = CAMERA_RAMP' main.gd
 grep -q '_hero_was_tapped' main.gd
 grep -q 'DOUBLE_TAP_WINDOW' main.gd
+grep -q 'preload("res://assets/models/red_wolf_standing.glb")' main.gd
+grep -q 'preload("res://assets/models/street_quad.glb")' main.gd
+test -s assets/models/red_wolf_standing.glb
+test -s assets/models/red_wolf_riding.glb
+test -s assets/models/street_quad.glb
+! grep -q 'func _build_quad' main.gd
+! grep -q 'func _build_wolf' main.gd
 grep -q 'ДИСТАНЦИЯ' main.gd
 grep -q 'КОСНИСЬ ГЕРОЯ, ЧТОБЫ НАЧАТЬ' main.gd
 ! grep -q 'TRICK button' main.gd
