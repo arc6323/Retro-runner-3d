@@ -97,6 +97,9 @@ jobs:
             --editor \
             --quit
 
+      - name: Validate project invariants
+        run: ./validate_project.sh
+
       - name: Build APK
         env:
           GODOT_ANDROID_KEYSTORE_DEBUG_PATH: ${{ github.workspace }}/build/debug.keystore

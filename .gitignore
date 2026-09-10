@@ -1,0 +1,14 @@
+# Godot generated files
+.godot/
+.import/
+*.tmp
+
+# Build artifacts
+build/
+*.apk
+*.aab
+
+# Editor and OS files
+.vscode/
+.idea/
+.DS_Store

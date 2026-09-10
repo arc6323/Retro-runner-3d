@@ -1,6 +1,12 @@
 extends Node3D
 
-var player: Node3D
+enum GameState { RUNNING, PAUSED, GAME_OVER }
+
+const LANE_X := [-3.5, 0.0, 3.5]
+const SWIPE_THRESHOLD := 80.0
+const TRICK_BONUS := 100
+
+var player: CharacterBody3D
 var camera: Camera3D
 var hud: Label
 
@@ -12,6 +18,8 @@ var lane: int = 1
 
 var distance: float = 0.0
 var score: int = 0
+var trick_score: int = 0
+var game_state := GameState.RUNNING
 
 var touch_start: Vector2 = Vector2.ZERO
 
@@ -27,6 +35,7 @@ var ramp_used: bool = false
 
 # Кувырок
 var trick_angle: float = 0.0
+var trick_requested: bool = false
 
 
 func _ready() -> void:
@@ -99,6 +108,15 @@ func _ready() -> void:
 
     add_child(road)
 
+    var road_body := StaticBody3D.new()
+    var road_collision := CollisionShape3D.new()
+    var road_shape := BoxShape3D.new()
+    road_shape.size = road_mesh.size
+    road_collision.shape = road_shape
+    road_body.position = road.position
+    road_body.add_child(road_collision)
+    add_child(road_body)
+
 
     # =========================
     # ROAD LINES
@@ -161,7 +179,7 @@ func _ready() -> void:
     # QUAD
     # =========================
 
-    player = Node3D.new()
+    player = CharacterBody3D.new()
 
     player.position = Vector3(
         0,
@@ -170,6 +188,13 @@ func _ready() -> void:
     )
 
     add_child(player)
+
+    var player_collision := CollisionShape3D.new()
+    var player_shape := BoxShape3D.new()
+    player_shape.size = Vector3(2.2, 1.6, 2.6)
+    player_collision.shape = player_shape
+    player_collision.position = Vector3(0, 0.8, 0)
+    player.add_child(player_collision)
 
 
     # =========================
@@ -347,6 +372,15 @@ func _create_building(
 
     building.add_child(body)
 
+    var building_body := StaticBody3D.new()
+    var building_collision := CollisionShape3D.new()
+    var building_shape := BoxShape3D.new()
+    building_shape.size = mesh.size
+    building_collision.shape = building_shape
+    building_collision.position = body.position
+    building_body.add_child(building_collision)
+    building.add_child(building_body)
+
 
     # =========================
     # WINDOWS
@@ -480,6 +514,16 @@ func _create_ramp() -> void:
 
     ramp.add_child(ramp_mesh)
 
+    var ramp_body := StaticBody3D.new()
+    var ramp_collision := CollisionShape3D.new()
+    var ramp_shape := BoxShape3D.new()
+    ramp_shape.size = ramp_box.size
+    ramp_collision.shape = ramp_shape
+    ramp_collision.position = ramp_mesh.position
+    ramp_collision.rotation_degrees = ramp_mesh.rotation_degrees
+    ramp_body.add_child(ramp_collision)
+    ramp.add_child(ramp_body)
+
 
     # Левый борт
 
@@ -594,7 +638,10 @@ func _start_jump() -> void:
     hud.text = "RED QUADRO\n\nJUMP!"
 
 
-func _process(delta: float) -> void:
+func _physics_process(delta: float) -> void:
+
+    if game_state != GameState.RUNNING:
+        return
 
     # =========================
     # DISTANCE
@@ -602,7 +649,7 @@ func _process(delta: float) -> void:
 
     distance += speed * delta
 
-    score = int(distance)
+    score = int(distance) + trick_score
 
 
     # =========================
@@ -681,7 +728,8 @@ func _process(delta: float) -> void:
         # FRONT FLIP
         # =========================
 
-        trick_angle += 360.0 * delta
+        var trick_speed := 540.0 if trick_requested else 360.0
+        trick_angle += trick_speed * delta
 
         player.rotation_degrees.x = trick_angle
 
@@ -697,10 +745,12 @@ func _process(delta: float) -> void:
             jumping = false
 
             jump_velocity = 0.0
+            trick_requested = false
 
             player.rotation_degrees = Vector3.ZERO
 
-            score += 100
+            trick_score += TRICK_BONUS
+            score = int(distance) + trick_score
 
             hud.text = "RED QUADRO\n\nTRICK +100"
 
@@ -711,20 +761,7 @@ func _process(delta: float) -> void:
 
     if player != null:
 
-        var target_x: float = 0.0
-
-
-        if lane == 0:
-
-            target_x = -3.5
-
-        elif lane == 1:
-
-            target_x = 0.0
-
-        else:
-
-            target_x = 3.5
+        var target_x: float = LANE_X[lane]
 
 
         player.position.x = lerp(
@@ -765,7 +802,7 @@ func _unhandled_input(event: InputEvent) -> void:
                 var difference: Vector2 = event.position - touch_start
 
 
-                if abs(difference.x) > 80.0:
+                if abs(difference.x) > SWIPE_THRESHOLD:
 
                     if difference.x > 0.0:
 
@@ -786,27 +823,38 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
     # =========================
-    # KEYBOARD
+    # ACTION INPUT
     # =========================
 
-    elif event is InputEventKey:
+    elif event.is_action_pressed("move_left"):
+        lane = max(0, lane - 1)
 
-        if not event.pressed:
+    elif event.is_action_pressed("move_right"):
+        lane = min(2, lane + 1)
 
-            return
+    elif event.is_action_pressed("trick"):
+        trick_requested = true
+
+    elif event.is_action_pressed("pause"):
+        game_state = GameState.RUNNING if game_state == GameState.PAUSED else GameState.PAUSED
+        hud.text = "RED QUADRO\n\nPAUSED" if game_state == GameState.PAUSED else "RED QUADRO\n\nRESUMED"
+
+    elif event.is_action_pressed("restart"):
+        _reset_run()
 
 
-        if event.keycode == KEY_LEFT:
-
-            lane = max(
-                0,
-                lane - 1
-            )
-
-
-        if event.keycode == KEY_RIGHT:
-
-            lane = min(
-                2,
-                lane + 1
-            )
+func _reset_run() -> void:
+    distance = 0.0
+    trick_score = 0
+    score = 0
+    lane = 1
+    jumping = false
+    jump_velocity = 0.0
+    trick_angle = 0.0
+    trick_requested = false
+    game_state = GameState.RUNNING
+    player.position = Vector3(0, 0, 4)
+    player.rotation = Vector3.ZERO
+    ramp.position.z = -50.0
+    for index in buildings.size():
+        buildings[index].position.z = -20.0 - index * 15.0
