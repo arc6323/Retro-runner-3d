@@ -68,17 +68,6 @@ var prop_homes: Array[Vector3] = []
 var ramp_home := Vector3(0, 0, -55)
 
 
-func _ready() -> void:
-	rng.randomize()
-	_load_high_score()
-	EnvKit.attach(self)
-	_create_world()
-	_create_player()
-	_create_camera()
-	_create_interface()
-	_enter_roadside_idle()
-
-
 func _create_world() -> void:
 	world_pivot = Node3D.new()
 	world_pivot.name = "WorldPivot"

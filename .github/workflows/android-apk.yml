@@ -39,7 +39,6 @@ jobs:
       - name: Create debug keystore
         run: |
           mkdir -p build
-
           keytool -genkeypair \
             -keystore "$GITHUB_WORKSPACE/build/debug.keystore" \
             -alias androiddebugkey \
@@ -53,7 +52,6 @@ jobs:
       - name: Configure Godot Android
         run: |
           mkdir -p "$HOME/.config/godot"
-
           cat > "$HOME/.config/godot/editor_settings-4.tres" <<EOF
           [gd_resource type="EditorSettings" format=3]
 
@@ -66,45 +64,29 @@ jobs:
         run: |
           python3 <<'PY'
           from pathlib import Path
-
           path = Path("project.godot")
           text = path.read_text(encoding="utf-8")
-
           setting = "textures/vram_compression/import_etc2_astc=true"
-
           if setting not in text:
               if "[rendering]" in text:
-                  text = text.replace(
-                      "[rendering]",
-                      "[rendering]\n" + setting,
-                      1
-                  )
+                  text = text.replace("[rendering]", "[rendering]\n" + setting, 1)
               else:
                   text += "\n[rendering]\n" + setting + "\n"
-
               path.write_text(text, encoding="utf-8")
-
           print("ETC2/ASTC enabled")
           PY
-
           grep -n "import_etc2_astc" project.godot
 
       - name: Import project
         run: |
-          godot \
-            --headless \
-            --path . \
-            --editor \
-            --quit
+          godot --headless --path . --editor --quit
 
       - name: Validate project invariants
-        run: ./validate_project.sh
+        run: bash ./validate_project.sh
 
       - name: Run gameplay smoke test
         run: |
-          xvfb-run -a godot \
-            --path . \
-            --script res://tests/gameplay_smoke.gd
+          xvfb-run -a godot --path . --script res://tests/gameplay_smoke.gd
 
       - name: Build APK
         env:
@@ -113,20 +95,12 @@ jobs:
           GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD: android
         run: |
           mkdir -p build
-
-          godot \
-            --headless \
-            --verbose \
-            --path . \
-            --export-debug "Android" \
-            build/retro_runner.apk
+          godot --headless --verbose --path . --export-debug "Android" build/retro_runner.apk
 
       - name: Check APK
         run: |
-          echo "Checking APK..."
           ls -lh build/
           test -f build/retro_runner.apk
-          echo "APK successfully created!"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
