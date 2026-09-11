@@ -23,9 +23,9 @@ static func attach_building(world_pivot: Node3D, x: float, z: float, width: floa
 	building.add_child(MeshKit.box(Vector3(width, height, depth), Vector3(0, height * 0.5, 0), body_colors[variant % 3]))
 	building.add_child(MeshKit.box(Vector3(width + 0.35, 0.35, depth + 0.35), Vector3(0, height + 0.1, 0), Color(0.1, 0.1, 0.11)))
 	var window_color: Color = accent_colors[variant % 3]
-	var rows := max(3, int(height / 2.4))
+	var rows: int = max(3, int(height / 2.4))
 	for row in range(rows):
-		var wy := 1.6 + float(row) * 2.3
+		var wy: float = 1.6 + float(row) * 2.3
 		if wy > height - 1.2:
 			continue
 		var lit := (row + variant) % 3 != 0
