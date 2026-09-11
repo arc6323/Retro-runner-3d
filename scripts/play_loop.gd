@@ -5,7 +5,6 @@ const SPEED_MULTIPLIER := 3.0
 const TRAFFIC_RAMP_CLEARANCE := 10.0
 const RUN_START_GRACE := 1.35
 
-
 static func animate_wolf(g: Node) -> void:
 	if g.wolf == null:
 		return
@@ -31,7 +30,6 @@ static func animate_wolf(g: Node) -> void:
 		g.scarf_tail.rotation_degrees.z = g.scarf_base + sin(g.elapsed_time * wind) * (12.0 if g.boost_remaining > 0.0 else 7.0)
 		g.scarf_tail.rotation_degrees.x = sin(g.elapsed_time * (wind * 0.65)) * 5.0
 
-
 static func update_mounting(g: Node, delta: float) -> void:
 	g.transition_time += delta
 	var t: float = clampf(g.transition_time / 0.85, 0.0, 1.0)
@@ -55,7 +53,6 @@ static func update_mounting(g: Node, delta: float) -> void:
 		g.title.visible = false
 		g.prompt.visible = false
 
-
 static func update_merging(g: Node, delta: float) -> void:
 	g.transition_time += delta
 	var t: float = clampf(g.transition_time / 1.15, 0.0, 1.0)
@@ -68,9 +65,13 @@ static func update_merging(g: Node, delta: float) -> void:
 		g.set_meta("run_grace_remaining", RUN_START_GRACE)
 		g._show_message("ПОЕХАЛИ!", 1.0)
 
-
 static func update_running(g: Node, delta: float) -> void:
-	var current_speed: float = (g.BOOST_SPEED if g.boost_remaining > 0.0 else g.BASE_SPEED) * SPEED_MULTIPLIER
+	# Speed starts at the requested 3x baseline and then ramps up gradually.
+	# The cap keeps the late game fast without turning it into uncontrollable teleportation.
+	var speed_ramp: float = min(g.distance * 0.0025, 8.0)
+	var normal_speed: float = g.BASE_SPEED + speed_ramp
+	var boost_speed: float = g.BOOST_SPEED + min(g.distance * 0.002, 6.0)
+	var current_speed: float = (boost_speed if g.boost_remaining > 0.0 else normal_speed) * SPEED_MULTIPLIER
 	g.boost_remaining = max(0.0, g.boost_remaining - delta)
 	var grace: float = float(g.get_meta("run_grace_remaining", 0.0))
 	if grace > 0.0:
@@ -95,13 +96,11 @@ static func update_running(g: Node, delta: float) -> void:
 	g._update_camera(delta)
 	g._update_hud(delta)
 
-
 static func scroll(nodes: Array, front_z: float, recycle: float, step: float) -> void:
 	for node in nodes:
 		node.position.z += step
 		if node.position.z > front_z:
 			node.position.z -= recycle
-
 
 static func _choose_safe_traffic_lane(g: Node, current_lane: int) -> int:
 	var candidates: Array[int] = []
@@ -110,23 +109,19 @@ static func _choose_safe_traffic_lane(g: Node, current_lane: int) -> int:
 			candidates.append(candidate)
 	if candidates.is_empty():
 		return current_lane
-	# Prefer a lane different from the player's current lane so a reroute
-	# around the ramp cannot immediately create a fresh collision.
 	for candidate in candidates:
 		if candidate != g.lane:
 			return candidate
 	return candidates[0]
 
-
 static func move_traffic(g: Node, delta: float, movement_speed: float, check_collision: bool) -> void:
 	for car in g.traffic:
 		var car_lane: int = int(car.get_meta("lane", 0))
-		# Traffic never drives through the ramp. If a car is approaching the
-		# ramp lane, move it to a clear lane before the two meshes overlap.
 		if abs(car.position.z - g.ramp.position.z) < TRAFFIC_RAMP_CLEARANCE and car_lane == g.ramp_lane:
 			car_lane = _choose_safe_traffic_lane(g, car_lane)
 			car.set_meta("lane", car_lane)
-			car.position.x = g.LANE_X[car_lane]
+			car.set_meta("target_lane", car_lane)
+		car.position.x = g.LANE_X[car_lane]
 
 		car.position.z += movement_speed * delta
 		if car.position.z > 18.0:
@@ -135,13 +130,24 @@ static func move_traffic(g: Node, delta: float, movement_speed: float, check_col
 			if abs(car.position.z - g.ramp.position.z) < TRAFFIC_RAMP_CLEARANCE and car_lane == g.ramp_lane:
 				car_lane = _choose_safe_traffic_lane(g, car_lane)
 			car.set_meta("lane", car_lane)
-			car.position.x = g.LANE_X[car_lane]
+			car.set_meta("target_lane", car_lane)
+
+		var target_x: float = float(g.LANE_X[car_lane])
+		car.position.x = lerpf(car.position.x, target_x, min(1.0, delta * 5.5))
+		car.rotation_degrees.y = lerpf(car.rotation_degrees.y, clampf((target_x - car.position.x) * -7.0, -18.0, 18.0), min(1.0, delta * 6.0))
+		for wheel in car.get_children():
+			if bool(wheel.get_meta("traffic_wheel", false)):
+				wheel.rotate_x(movement_speed * delta * 1.9)
 
 		var grace: float = float(g.get_meta("run_grace_remaining", 0.0))
-		if check_collision and grace <= 0.0 and not g.jumping and car_lane == g.lane and car.position.z > 1.8 and car.position.z < 5.7:
-			g._game_over()
-			return
-
+		if check_collision and grace <= 0.0 and not g.jumping:
+			var player_pos: Vector3 = g.player.global_position
+			var car_pos: Vector3 = car.global_position
+			var horizontal_distance: float = Vector2(player_pos.x - car_pos.x, player_pos.z - car_pos.z).length()
+			var vertical_distance: float = abs(player_pos.y - car_pos.y)
+			if horizontal_distance < 1.55 and vertical_distance < 1.35:
+				g._game_over()
+				return
 
 static func update_world_shift(g: Node, delta: float) -> void:
 	var target_x: float = -float(g.LANE_X[g.lane])
