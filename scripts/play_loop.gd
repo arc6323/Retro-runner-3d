@@ -100,7 +100,7 @@ static func move_traffic(g: Node, delta: float, movement_speed: float, check_col
 		car.position.z += movement_speed * delta
 		if car.position.z > 18.0:
 			car.position.z -= 128.0
-			var next_lane := g.rng.randi_range(0, 2)
+			var next_lane: int = g.rng.randi_range(0, 2)
 			car.set_meta("lane", next_lane)
 			car.position.x = g.LANE_X[next_lane]
 		if check_collision and not g.jumping and int(car.get_meta("lane")) == g.lane and car.position.z > 1.8 and car.position.z < 5.7:
