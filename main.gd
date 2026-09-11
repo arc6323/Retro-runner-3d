@@ -148,7 +148,8 @@ func _start_jump() -> void:
 	if jumping or game_state != GameState.RUNNING:
 		return
 	jumping = true
-	jump_velocity = 12.0
+	jump_velocity = 14.5
+	player.position.y = 0.28
 	trick_angle = 0.0
 	ramp_used = true
 	_show_message("ПРЫЖОК!", 0.7)
