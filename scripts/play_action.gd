@@ -3,51 +3,31 @@ extends RefCounted
 
 
 static func update_jump(g: Node, delta: float) -> void:
-	if not g.jumping and not g.ramp_used and g.lane == g.ramp_lane:
-		var ramp_front_z: float = g.ramp.position.z + 4.0
-		if ramp_front_z >= 2.0 and ramp_front_z <= 5.0:
-			g._start_jump()
-	if not g.jumping:
-		return
-	g.jump_velocity -= g.jump_gravity * delta
-	g.player.position.y += g.jump_velocity * delta
-	g.trick_angle += (560.0 if g.trick_requested else 280.0) * delta
-	g.vehicle_visual.rotation_degrees.x = g.trick_angle
-	g.wolf.rotation_degrees.x = g.trick_angle * 0.92
-	if g.player.position.y <= 0.0:
-		g.player.position.y = 0.0
-		g.jumping = false
-		g.jump_velocity = 0.0
-		g.vehicle_visual.rotation_degrees.x = 0.0
-		g.wolf.rotation_degrees.x = 0.0
-		g.camera_shake = 0.55 if g.trick_requested else 0.35
-		if g.trick_requested:
-			g.trick_score += g.TRICK_BONUS
-			g._show_message("ТРЮК +100", 1.2)
-		else:
-			g._show_message("МЯГКОЕ ПРИЗЕМЛЕНИЕ", 0.8)
-		g.trick_requested = false
+	# Jump simulation is owned by main.gd now. Kept as a compatibility stub
+	# for older calls so the project remains safe if another scene references it.
+	return
 
 
 static func update_camera(g: Node, delta: float) -> void:
-	var target_position: Vector3 = g.CAMERA_CHASE
+	# The chase camera is deliberately farther away for tall mobile screens.
+	var target_position: Vector3 = g.CAMERA_CHASE * 1.8
 	var target_fov := 68.0
 	var target_look: Vector3 = g.player.position + Vector3(g.steer_visual * 0.015, 1.35, -2.4)
 	if g.game_state == g.GameState.ROADSIDE_IDLE or g.game_state == g.GameState.MOUNTING:
-		target_position = g.CAMERA_IDLE
+		target_position = g.CAMERA_IDLE * 1.8
 		target_fov = 58.0
 		target_look = g.player.position + Vector3(-0.35, 1.55, 0.15)
 	elif g.game_state == g.GameState.MERGING:
 		target_fov = 66.0
 	elif g.jumping or g._ramp_is_close():
-		target_position = g.CAMERA_RAMP
+		target_position = g.CAMERA_RAMP * 1.8
 		target_fov = 76.0
 		target_look = g.player.position + Vector3(0, 1.7, -3.2)
 	elif g.boost_remaining > 0.0:
-		target_position = g.CAMERA_CHASE + Vector3(0, 0.25, 1.1)
+		target_position = (g.CAMERA_CHASE + Vector3(0, 0.25, 1.1)) * 1.8
 		target_fov = 74.0
 	if g.game_state == g.GameState.GAME_OVER:
-		target_position = Vector3(1.6, 3.4, 6.4)
+		target_position = Vector3(1.6, 3.4, 6.4) * 1.8
 		target_fov = 52.0
 		target_look = g.player.position + Vector3(0, 1.1, 0)
 	g.camera.position = g.camera.position.lerp(target_position, min(1.0, delta * 3.2))
@@ -67,7 +47,9 @@ static func handle_pointer(g: Node, position: Vector2, pressed: bool) -> void:
 	g.touch_active = false
 	var difference: Vector2 = position - g.touch_start
 	if g.game_state == g.GameState.ROADSIDE_IDLE:
-		if g._hero_was_tapped(position):
+		# Starting the run is intentionally restricted to the character or
+		# quad. Taps on the rest of the screen do nothing.
+		if g._hero_was_tapped(position) or g._vehicle_was_tapped(position):
 			g._begin_start_sequence()
 		return
 	if g.game_state == g.GameState.PAUSED:
@@ -97,6 +79,7 @@ static func reset_run(g: Node) -> void:
 	g.boost_remaining = 0.0
 	g.steer_visual = 0.0
 	g.camera_shake = 0.0
+	g.set_meta("run_grace_remaining", 0.0)
 	g.ramp_lane = 1
 	g.ramp_used = false
 	g.ramp.position = Vector3(g.LANE_X[g.ramp_lane], 0.0, g.ramp_home.z)
