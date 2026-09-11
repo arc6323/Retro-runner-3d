@@ -1,5 +1,16 @@
 extends GameBase
 
+func _ready() -> void:
+	rng.randomize()
+	_load_high_score()
+	EnvKit.attach(self)
+	_create_world()
+	_create_player()
+	_create_camera()
+	_create_interface()
+	_enter_roadside_idle()
+
+
 func _create_camera() -> void:
 	camera = Camera3D.new()
 	camera.name = "CameraRig"
