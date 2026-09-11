@@ -1,6 +1,10 @@
 class_name PlayLoop
 extends RefCounted
 
+const SPEED_MULTIPLIER := 3.0
+const TRAFFIC_RAMP_CLEARANCE := 10.0
+const RUN_START_GRACE := 1.35
+
 
 static func animate_wolf(g: Node) -> void:
 	if g.wolf == null:
@@ -61,12 +65,16 @@ static func update_merging(g: Node, delta: float) -> void:
 		g.game_state = g.GameState.RUNNING
 		g.vehicle_visual.rotation_degrees.z = 0.0
 		g.hud.visible = true
+		g.set_meta("run_grace_remaining", RUN_START_GRACE)
 		g._show_message("ПОЕХАЛИ!", 1.0)
 
 
 static func update_running(g: Node, delta: float) -> void:
-	var current_speed: float = g.BOOST_SPEED if g.boost_remaining > 0.0 else g.BASE_SPEED
+	var current_speed: float = (g.BOOST_SPEED if g.boost_remaining > 0.0 else g.BASE_SPEED) * SPEED_MULTIPLIER
 	g.boost_remaining = max(0.0, g.boost_remaining - delta)
+	var grace: float = float(g.get_meta("run_grace_remaining", 0.0))
+	if grace > 0.0:
+		g.set_meta("run_grace_remaining", max(0.0, grace - delta))
 	g.distance += current_speed * delta
 	g.score = int(g.distance) + g.trick_score
 	scroll(g.buildings, 22.0, 156.0, current_speed * delta)
@@ -95,15 +103,42 @@ static func scroll(nodes: Array, front_z: float, recycle: float, step: float) ->
 			node.position.z -= recycle
 
 
+static func _choose_safe_traffic_lane(g: Node, current_lane: int) -> int:
+	var candidates: Array[int] = []
+	for candidate in range(3):
+		if candidate != g.ramp_lane:
+			candidates.append(candidate)
+	if candidates.is_empty():
+		return current_lane
+	# Prefer a lane different from the player's current lane so a reroute
+	# around the ramp cannot immediately create a fresh collision.
+	for candidate in candidates:
+		if candidate != g.lane:
+			return candidate
+	return candidates[0]
+
+
 static func move_traffic(g: Node, delta: float, movement_speed: float, check_collision: bool) -> void:
 	for car in g.traffic:
+		var car_lane: int = int(car.get_meta("lane", 0))
+		# Traffic never drives through the ramp. If a car is approaching the
+		# ramp lane, move it to a clear lane before the two meshes overlap.
+		if abs(car.position.z - g.ramp.position.z) < TRAFFIC_RAMP_CLEARANCE and car_lane == g.ramp_lane:
+			car_lane = _choose_safe_traffic_lane(g, car_lane)
+			car.set_meta("lane", car_lane)
+			car.position.x = g.LANE_X[car_lane]
+
 		car.position.z += movement_speed * delta
 		if car.position.z > 18.0:
 			car.position.z -= 128.0
-			var next_lane: int = g.rng.randi_range(0, 2)
-			car.set_meta("lane", next_lane)
-			car.position.x = g.LANE_X[next_lane]
-		if check_collision and not g.jumping and int(car.get_meta("lane")) == g.lane and car.position.z > 1.8 and car.position.z < 5.7:
+			car_lane = g.rng.randi_range(0, 2)
+			if abs(car.position.z - g.ramp.position.z) < TRAFFIC_RAMP_CLEARANCE and car_lane == g.ramp_lane:
+				car_lane = _choose_safe_traffic_lane(g, car_lane)
+			car.set_meta("lane", car_lane)
+			car.position.x = g.LANE_X[car_lane]
+
+		var grace: float = float(g.get_meta("run_grace_remaining", 0.0))
+		if check_collision and grace <= 0.0 and not g.jumping and car_lane == g.lane and car.position.z > 1.8 and car.position.z < 5.7:
 			g._game_over()
 			return
 
