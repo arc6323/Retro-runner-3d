@@ -20,7 +20,7 @@ test -s assets/models/street_quad.glb
 ! grep -R -q --include='*.gd' 'func _build_quad' .
 ! grep -R -q --include='*.gd' 'func _build_wolf' .
 gd 'ДИСТАНЦИЯ'
-gd 'КОСНИСЬ ГЕРОЯ, ЧТОБЫ НАЧАТЬ'
+gd 'КОСНИСЬ РЭДА ИЛИ КВАДРОЦИКЛА'
 ! grep -R -q --include='*.gd' 'TRICK button' .
 test -s tests/gameplay_smoke.gd
 grep -q 'Gameplay smoke test passed' tests/gameplay_smoke.gd
