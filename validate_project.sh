@@ -32,4 +32,7 @@ test -s scripts/city_kit.gd
 test -s scripts/play_loop.gd
 test -s scripts/play_action.gd
 test -s scripts/game_base.gd
+# New gameplay invariants.
+gd 'Speed starts at the requested 3x baseline'
+gd 'horizontal_distance < 1.55'
 echo "Project invariant checks passed"
