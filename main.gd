@@ -141,7 +141,36 @@ func _update_world_shift(delta: float) -> void:
 
 
 func _update_jump(delta: float) -> void:
-	PlayAction.update_jump(self, delta)
+	# Auto-launch only when the ramp is directly approaching the quad.
+	# This keeps the other two lanes on the road instead of making them jump.
+	if not jumping and not ramp_used and lane == ramp_lane:
+		var ramp_center_z: float = ramp.position.z
+		if ramp_center_z >= 2.7 and ramp_center_z <= 4.6:
+			_start_jump()
+	if not jumping:
+		return
+
+	jump_velocity -= jump_gravity * delta
+	player.position.y += jump_velocity * delta
+
+	# Keep the quad and rider rotating together while airborne.
+	trick_angle += (560.0 if trick_requested else 280.0) * delta
+	vehicle_visual.rotation_degrees.x = trick_angle
+	wolf.rotation_degrees.x = trick_angle * 0.92
+
+	if player.position.y <= 0.0 and jump_velocity < 0.0:
+		player.position.y = 0.0
+		jumping = false
+		jump_velocity = 0.0
+		vehicle_visual.rotation_degrees.x = 0.0
+		wolf.rotation_degrees.x = 0.0
+		camera_shake = 0.55 if trick_requested else 0.35
+		if trick_requested:
+			trick_score += TRICK_BONUS
+			_show_message("ТРЮК +100", 1.2)
+		else:
+			_show_message("МЯГКОЕ ПРИЗЕМЛЕНИЕ", 0.8)
+		trick_requested = false
 
 
 func _start_jump() -> void:
@@ -149,6 +178,8 @@ func _start_jump() -> void:
 		return
 	jumping = true
 	jump_velocity = 14.5
+	# Small lift at the ramp lip prevents the quad body from visually clipping
+	# through the final edge of the ramp.
 	player.position.y = 0.28
 	trick_angle = 0.0
 	ramp_used = true
