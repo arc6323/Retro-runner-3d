@@ -8,6 +8,7 @@ var sound_button: Button
 var selected_character := 0
 var selected_vehicle := 0
 var sound_enabled := true
+var crash_dust: Array[Node3D] = []
 
 func _ready() -> void:
 	rng.randomize()
@@ -159,6 +160,7 @@ func _enter_roadside_idle() -> void:
 	crash_active = false
 	crash_time = 0.0
 	crash_car = null
+	_clear_crash_dust()
 	title.visible = false
 	prompt.visible = false
 	garage_button.visible = true
@@ -197,7 +199,7 @@ func _physics_process(delta: float) -> void:
 		_update_camera(delta)
 		return
 	if game_state == GameState.GAME_OVER:
-		PlayLoop.update_crash(self, delta)
+		_update_crash_sequence(delta)
 		_update_camera(delta)
 		return
 	_update_running(delta)
@@ -265,9 +267,84 @@ func _game_over(hit_car: Node3D = null) -> void:
 	jump_velocity = 0.0
 	vehicle_visual.rotation_degrees = Vector3(0.0, 180.0, 0.0)
 	camera_shake = 0.8
+	_create_crash_dust()
 	_save_high_score()
 	Input.vibrate_handheld(90)
 	hud.text = "🪙 %d      %.2f км      %d км/ч" % [coins, distance / 1000.0, int(round(float(get_meta("current_speed_kmh", 0.0))))]
+
+func _create_crash_dust() -> void:
+	_clear_crash_dust()
+	for i in range(8):
+		var puff := MeshKit.cylinder(0.16 + float(i % 3) * 0.06, 0.10 + float(i % 2) * 0.04, Vector3.ZERO, Color(0.48, 0.42, 0.34))
+		puff.name = "CrashDust_%02d" % i
+		puff.rotation_degrees.x = 90.0
+		puff.scale = Vector3.ONE * 0.25
+		world_pivot.add_child(puff)
+		crash_dust.append(puff)
+
+func _clear_crash_dust() -> void:
+	for puff in crash_dust:
+		if is_instance_valid(puff):
+			puff.queue_free()
+	crash_dust.clear()
+
+func _update_crash_dust(t: float) -> void:
+	var center := player.global_position + Vector3(0, 0.12, -2.6)
+	for i in crash_dust.size():
+		var puff: Node3D = crash_dust[i]
+		var phase: float = float(i) * 0.7
+		var spread := Vector3(cos(phase) * 1.1, 0.15 + float(i % 3) * 0.18, sin(phase) * 0.8)
+		puff.global_position = center + spread + Vector3(0, 0, -t * 1.4)
+		puff.scale = Vector3.ONE * (0.25 + t * (1.25 + float(i % 3) * 0.25))
+		puff.modulate = Color(1.0, 1.0, 1.0, max(0.0, 1.0 - t * 0.85))
+
+func _update_crash_sequence(delta: float) -> void:
+	if not crash_active:
+		return
+	crash_time += delta
+	var t: float = crash_time
+	# 0.0–0.9: Red is thrown forward, away from the quad, in the road's -Z direction.
+	if t < 0.9:
+		if wolf != wolf_riding:
+			_set_active_wolf(wolf_riding)
+		var p: float = clampf(t / 0.9, 0.0, 1.0)
+		var arc: float = sin(p * PI) * 2.0
+		wolf_riding.position = Vector3(0.0, 0.10 + arc, -5.0 * p)
+		wolf_riding.rotation_degrees = Vector3(lerpf(0.0, -110.0, p), 180.0, lerpf(0.0, -12.0, p))
+		_update_crash_dust(p * 0.55)
+	# 0.9–1.8: Red stands up several meters ahead and dusts himself off.
+	elif t < 1.8:
+		if wolf != wolf_standing:
+			_set_active_wolf(wolf_standing)
+		var stand_p: float = smoothstep(0.0, 1.0, (t - 0.9) / 0.9)
+		wolf_standing.position = Vector3(0.0, 0.0, -5.0)
+		wolf_standing.rotation_degrees = Vector3(0.0, 180.0, sin(stand_p * PI * 2.0) * 7.0)
+		if wolf_head != null:
+			wolf_head.rotation_degrees.y = sin(stand_p * PI * 4.0) * 12.0
+		_update_crash_dust(1.0 - stand_p * 0.5)
+	# 1.8–3.4: Red walks/runs back to the quad.
+	elif t < 3.4:
+		if wolf != wolf_standing:
+			_set_active_wolf(wolf_standing)
+		var return_p: float = smoothstep(0.0, 1.0, (t - 1.8) / 1.6)
+		wolf_standing.position = Vector3(0.0, 0.0, lerpf(-5.0, 0.0, return_p))
+		wolf_standing.rotation_degrees = Vector3(0.0, 180.0, 0.0)
+		_update_crash_dust(0.5 - return_p * 0.5)
+	else:
+		_set_active_wolf(wolf_riding)
+		wolf_riding.position = Vector3.ZERO
+		wolf_riding.rotation_degrees = Vector3(0.0, 180.0, 0.0)
+		_clear_crash_dust()
+	# Collision car is kicked forward, in the same -Z direction as the runner's travel.
+	if crash_car != null and is_instance_valid(crash_car):
+		var car_p: float = clampf(t / 1.35, 0.0, 1.0)
+		crash_car.position.z -= lerpf(2.8, 5.2, car_p) * delta
+		crash_car.rotation_degrees.x += 610.0 * delta
+		crash_car.rotation_degrees.z = sin(t * 10.0) * 24.0 * (1.0 - car_p)
+		for wheel in crash_car.get_children():
+			if bool(wheel.get_meta("traffic_wheel", false)):
+				wheel.rotate_x(22.0 * delta)
+	camera_shake = max(camera_shake, 0.18 * max(0.0, 1.0 - min(t, 1.0)))
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("pause") and game_state in [GameState.RUNNING, GameState.PAUSED]:
