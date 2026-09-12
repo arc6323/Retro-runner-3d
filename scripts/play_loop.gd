@@ -59,7 +59,7 @@ static func update_mounting(g: Node, delta: float) -> void:
 	if t >= 1.0:
 		g.game_state = g.GameState.MERGING
 		g.transition_time = 0.0
-	g.wolf_riding.position = Vector3.ZERO
+		g.wolf_riding.position = Vector3.ZERO
 		g.wolf_riding.rotation_degrees = Vector3(0, 180, 0)
 		g.title.visible = false
 		g.prompt.visible = false
