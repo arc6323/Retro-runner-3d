@@ -67,6 +67,8 @@ jobs:
           grep -n "import_etc2_astc" project.godot
       - name: Apply gameplay and flight fixes
         run: python3 scripts/build_patch.py
+      - name: Apply track variety
+        run: python3 scripts/variety_patch.py
       - name: Import project
         run: godot --headless --path . --editor --quit
       - name: Validate project invariants
