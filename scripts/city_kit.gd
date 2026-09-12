@@ -1,7 +1,6 @@
 class_name CityKit
 extends RefCounted
 
-
 static func attach_road(world_pivot: Node3D) -> void:
 	world_pivot.add_child(MeshKit.box(Vector3(28, 0.4, 180), Vector3(0, -0.38, -70), Color(0.09, 0.09, 0.1)))
 	world_pivot.add_child(MeshKit.box(Vector3(11.4, 0.18, 180), Vector3(0, -0.18, -70), Color(0.12, 0.12, 0.13)))
@@ -12,7 +11,6 @@ static func attach_road(world_pivot: Node3D) -> void:
 	for x in [-1.75, 1.75]:
 		for z in range(-150, 20, 7):
 			world_pivot.add_child(MeshKit.box(Vector3(0.12, 0.03, 2.6), Vector3(x, 0.01, float(z)), Color(0.78, 0.76, 0.68)))
-
 
 static func attach_building(world_pivot: Node3D, x: float, z: float, width: float, height: float, depth: float, variant: int) -> Node3D:
 	var building := Node3D.new()
@@ -38,7 +36,6 @@ static func attach_building(world_pivot: Node3D, x: float, z: float, width: floa
 		building.add_child(MeshKit.box(Vector3(width * 0.7, 1.6, 0.12), Vector3(0, height * 0.62, depth * 0.5 + 0.2), Color(0.08, 0.08, 0.08), window_color * 0.4))
 	return building
 
-
 static func attach_lamps(world_pivot: Node3D) -> Array:
 	var lamps: Array = []
 	for z in range(-140, 16, 18):
@@ -59,21 +56,21 @@ static func attach_lamps(world_pivot: Node3D) -> Array:
 			lamps.append(lamp)
 	return lamps
 
-
 static func attach_ramp(world_pivot: Node3D, position: Vector3) -> Node3D:
 	var ramp := Node3D.new()
 	ramp.name = "Ramp"
-	ramp.position = position
+	# The ramp rises in the direction of travel: low end first, high end at the near side.
+	ramp.position = position + Vector3(0.0, 0.20, 0.0)
 	world_pivot.add_child(ramp)
 	var deck := MeshKit.box(Vector3(3.1, 0.42, 8.2), Vector3(0, 0.38, 0), Color(0.55, 0.16, 0.12))
-	deck.rotation_degrees.x = 11.0
+	deck.rotation_degrees.x = -11.0
 	ramp.add_child(deck)
 	for x in [-1.5, 1.5]:
 		var rail := MeshKit.box(Vector3(0.14, 0.55, 8.2), Vector3(x, 0.5, 0), Color(0.75, 0.75, 0.72))
-		rail.rotation_degrees.x = 11.0
+		rail.rotation_degrees.x = -11.0
+		rail.set_meta("ramp_rail", true)
 		ramp.add_child(rail)
 	return ramp
-
 
 static func make_car(car_lane: int, z: float, color: Color, lane_x: Array) -> Node3D:
 	var car := Node3D.new()
@@ -86,5 +83,7 @@ static func make_car(car_lane: int, z: float, color: Color, lane_x: Array) -> No
 	car.add_child(MeshKit.box(Vector3(0.42, 0.14, 0.08), Vector3(-0.62, 0.68, 2.16), Color(0.85, 0.12, 0.1), Color(0.7, 0.05, 0.05)))
 	car.add_child(MeshKit.box(Vector3(0.42, 0.14, 0.08), Vector3(0.62, 0.68, 2.16), Color(0.85, 0.12, 0.1), Color(0.7, 0.05, 0.05)))
 	for wheel_pos in [Vector3(-0.9, 0.28, 1.35), Vector3(0.9, 0.28, 1.35), Vector3(-0.9, 0.28, -1.35), Vector3(0.9, 0.28, -1.35)]:
-		car.add_child(MeshKit.cylinder(0.28, 0.22, wheel_pos, Color(0.06, 0.06, 0.06)))
+		var wheel := MeshKit.cylinder(0.28, 0.22, wheel_pos, Color(0.06, 0.06, 0.06))
+		wheel.set_meta("traffic_wheel", true)
+		car.add_child(wheel)
 	return car
