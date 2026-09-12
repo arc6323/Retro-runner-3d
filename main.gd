@@ -18,7 +18,13 @@ func _ready() -> void:
 	_create_player()
 	_create_camera()
 	_create_interface()
+	_hide_legacy_boost_pickups()
 	_enter_roadside_idle()
+
+func _hide_legacy_boost_pickups() -> void:
+	for index in pickups.size():
+		if pickup_types[index] == "boost":
+			pickups[index].visible = false
 
 func _create_camera() -> void:
 	camera = Camera3D.new()
@@ -393,11 +399,8 @@ func _vehicle_was_tapped(screen_position: Vector2) -> bool:
 	return quad_point.distance_to(screen_position) < 250.0
 
 func _handle_tap() -> void:
-	var now := Time.get_ticks_msec() / 1000.0
 	if jumping:
 		trick_requested = true
-	else:
-		last_tap_time = now
 
 func _reset_run() -> void:
 	PlayAction.reset_run(self)
