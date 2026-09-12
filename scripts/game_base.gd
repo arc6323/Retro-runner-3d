@@ -9,7 +9,6 @@ const DOUBLE_TAP_WINDOW := 0.32
 const TRICK_BONUS := 100
 const BASE_SPEED := 11.0
 const BOOST_SPEED := 18.0
-# Keep the chase camera exactly centered on the road to avoid a perceived right tilt.
 const CAMERA_CHASE := Vector3(0.0, 4.8, 9.6)
 const CAMERA_RAMP := Vector3(0.0, 6.2, 13.2)
 const CAMERA_IDLE := Vector3(0.0, 4.6, 9.8)
@@ -99,7 +98,7 @@ func _create_world() -> void:
 	ramp_home = Vector3(LANE_X[ramp_lane], 0, -55)
 	ramp = CityKit.attach_ramp(world_pivot, ramp_home)
 	_create_pickups()
-	# Traffic is intentionally restricted to the two side lanes; the center lane is the player's safe line.
+	# Before the start, traffic uses only the side lanes. The center lane is free for the player.
 	var cars := [
 		[0, -24.0, Color(0.12, 0.13, 0.16)], [2, -41.0, Color(0.42, 0.08, 0.08)],
 		[0, -63.0, Color(0.08, 0.12, 0.22)], [2, -88.0, Color(0.18, 0.18, 0.16)],
@@ -114,7 +113,6 @@ func _create_world() -> void:
 
 
 func _create_pickups() -> void:
-	# Rare power-ups: flight/rocket is intentionally only one item in this cycle.
 	var types := ["coin", "coin", "shield", "coin", "magnet", "coin", "coin", "coin", "boost", "coin", "coin", "shield", "coin", "coin", "magnet", "coin", "boost", "coin", "coin", "coin", "coin", "coin", "coin", "flight"]
 	for index in range(types.size()):
 		var pickup_type: String = types[index]
@@ -132,28 +130,23 @@ func _create_pickups() -> void:
 
 func _create_pickup_visual(pickup: Node3D, pickup_type: String) -> void:
 	var icon_color := Color(1.0, 0.78, 0.15)
-	var icon_text := ""
 	if pickup_type == "shield":
 		icon_color = Color(0.25, 0.72, 1.0)
-		icon_text = "ЩИТ"
 		pickup.add_child(MeshKit.cylinder(0.5, 0.16, Vector3(0, 0, 0), icon_color))
 		pickup.add_child(MeshKit.box(Vector3(0.58, 0.12, 0.16), Vector3(0, 0, -0.32), Color(0.7, 0.9, 1.0)))
 	elif pickup_type == "magnet":
 		icon_color = Color(0.95, 0.22, 0.48)
-		icon_text = "МАГ"
 		pickup.add_child(MeshKit.box(Vector3(0.16, 0.62, 0.18), Vector3(-0.3, 0, 0), icon_color))
 		pickup.add_child(MeshKit.box(Vector3(0.16, 0.62, 0.18), Vector3(0.3, 0, 0), icon_color))
 		pickup.add_child(MeshKit.box(Vector3(0.76, 0.16, 0.18), Vector3(0, -0.28, 0), icon_color))
 	elif pickup_type == "boost":
 		icon_color = Color(1.0, 0.38, 0.08)
-		icon_text = "БУСТ"
 		var bolt := MeshKit.box(Vector3(0.22, 0.9, 0.22), Vector3(0, 0, 0), icon_color, Color(1.0, 0.85, 0.2))
 		bolt.rotation_degrees.z = 35.0
 		pickup.add_child(bolt)
 		pickup.add_child(MeshKit.box(Vector3(0.7, 0.12, 0.12), Vector3(0, 0.18, 0), Color(1.0, 0.85, 0.2)))
 	elif pickup_type == "flight":
 		icon_color = Color(0.75, 0.42, 1.0)
-		icon_text = "ПОЛЁТ"
 		var wing_l := MeshKit.box(Vector3(0.95, 0.12, 0.38), Vector3(-0.48, 0, 0), icon_color)
 		var wing_r := MeshKit.box(Vector3(0.95, 0.12, 0.38), Vector3(0.48, 0, 0), icon_color)
 		wing_l.rotation_degrees.z = -18.0
@@ -164,25 +157,12 @@ func _create_pickup_visual(pickup: Node3D, pickup_type: String) -> void:
 		var coin := MeshKit.cylinder(0.42, 0.16, Vector3.ZERO, icon_color)
 		coin.rotation_degrees.x = 90.0
 		pickup.add_child(coin)
-		return
-	var label := Label3D.new()
-	label.text = icon_text
-	label.position = Vector3(0, 0.78, 0)
-	label.font_size = 42
-	label.pixel_size = 0.004
-	label.outline_size = 7
-	label.outline_modulate = Color(0.02, 0.02, 0.03, 1.0)
-	label.modulate = Color(1.0, 1.0, 1.0, 1.0)
-	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	label.fixed_size = true
-	label.no_depth_test = true
-	pickup.add_child(label)
 
 
 func _create_player() -> void:
 	player = CharacterBody3D.new()
 	player.name = "PlayerAnchor"
-	player.position = Vector3(-4.2, 0, 4)
+	player.position = Vector3(0, 0, 4)
 	add_child(player)
 	var collision := CollisionShape3D.new()
 	var shape := BoxShape3D.new()
