@@ -3,15 +3,15 @@ extends Node3D
 
 enum GameState { ROADSIDE_IDLE, MOUNTING, MERGING, RUNNING, PAUSED, GAME_OVER }
 
-const LANE_X := [-3.5, 0.0, 3.5]
+const LANE_X := [-4.6, -2.3, 0.0, 2.3, 4.6]
 const SWIPE_THRESHOLD := 70.0
 const DOUBLE_TAP_WINDOW := 0.32
 const TRICK_BONUS := 100
 const BASE_SPEED := 11.0
 const BOOST_SPEED := 18.0
-const CAMERA_CHASE := Vector3(0.35, 4.8, 9.6)
-const CAMERA_RAMP := Vector3(0.15, 6.4, 13.8)
-const CAMERA_IDLE := Vector3(-2.15, 4.6, 9.8)
+const CAMERA_CHASE := Vector3(0.0, 4.8, 9.6)
+const CAMERA_RAMP := Vector3(0.0, 6.2, 13.2)
+const CAMERA_IDLE := Vector3(0.0, 4.6, 9.8)
 const SAVE_PATH := "user://neon_wasteland.cfg"
 const WOLF_STANDING_SCENE: PackedScene = preload("res://assets/models/red_wolf_standing.glb")
 const WOLF_RIDING_SCENE: PackedScene = preload("res://assets/models/red_wolf_riding.glb")
@@ -36,9 +36,9 @@ var props: Array[Node3D] = []
 var wheel_spin_pivots: Array[Node3D] = []
 var front_wheel_pivots: Array[Node3D] = []
 var ramp: Node3D
-var ramp_lane := 1
+var ramp_lane := 2
 var ramp_used := false
-var lane := 1
+var lane := 2
 var distance := 0.0
 var score := 0
 var trick_score := 0
@@ -49,6 +49,11 @@ var jump_gravity := 24.0
 var trick_requested := false
 var trick_angle := 0.0
 var boost_remaining := 0.0
+var shield_remaining := 0.0
+var magnet_remaining := 0.0
+var flight_remaining := 0.0
+var flight_invulnerability_remaining := 0.0
+var coins := 0
 var touch_start := Vector2.ZERO
 var touch_active := false
 var last_tap_time := -10.0
@@ -60,13 +65,18 @@ var camera_shake := 0.0
 var look_yaw := 0.0
 var look_pitch := 0.0
 var scarf_base := -28.0
+var crash_active := false
+var crash_time := 0.0
+var crash_car: Node3D = null
 var rng := RandomNumberGenerator.new()
 var building_homes: Array[Vector3] = []
 var traffic_homes: Array[Vector3] = []
 var traffic_home_lanes: Array[int] = []
 var prop_homes: Array[Vector3] = []
+var pickup_homes: Array[Vector3] = []
+var pickup_types: Array[String] = []
+var pickups: Array[Node3D] = []
 var ramp_home := Vector3(0, 0, -55)
-
 
 func _create_world() -> void:
 	world_pivot = Node3D.new()
@@ -89,10 +99,11 @@ func _create_world() -> void:
 		prop_homes.append(lamp.position)
 	ramp_home = Vector3(LANE_X[ramp_lane], 0, -55)
 	ramp = CityKit.attach_ramp(world_pivot, ramp_home)
+	_create_pickups()
 	var cars := [
-		[0, -24.0, Color(0.12, 0.13, 0.16)], [2, -41.0, Color(0.42, 0.08, 0.08)],
-		[1, -63.0, Color(0.08, 0.12, 0.22)], [0, -88.0, Color(0.18, 0.18, 0.16)],
-		[2, -112.0, Color(0.08, 0.08, 0.08)],
+		[0, -24.0, Color(0.12, 0.13, 0.16)], [4, -41.0, Color(0.42, 0.08, 0.08)],
+		[0, -63.0, Color(0.08, 0.12, 0.22)], [4, -88.0, Color(0.18, 0.18, 0.16)],
+		[0, -112.0, Color(0.08, 0.08, 0.08)],
 	]
 	for spec in cars:
 		var car := CityKit.make_car(int(spec[0]), spec[1], spec[2], LANE_X)
@@ -101,11 +112,46 @@ func _create_world() -> void:
 		traffic_homes.append(car.position)
 		traffic_home_lanes.append(int(spec[0]))
 
+func _create_pickups() -> void:
+	# Only the four requested pickup families remain: coins, magnet, flight and the existing non-visual shield logic is disabled.
+	var types := ["coin", "coin", "magnet", "coin", "coin", "flight", "coin", "magnet", "coin", "coin", "coin", "flight", "coin", "magnet", "coin", "coin", "coin", "flight", "coin", "coin"]
+	for index in range(types.size()):
+		var pickup_type: String = types[index]
+		var pickup := Node3D.new()
+		pickup.name = "Pickup_%02d_%s" % [index, pickup_type]
+		pickup.position = Vector3(LANE_X[index % 5], 0.9 if pickup_type == "coin" else 1.05, -18.0 - float(index) * 18.0)
+		pickup.set_meta("pickup_type", pickup_type)
+		pickup.set_meta("home_position", pickup.position)
+		world_pivot.add_child(pickup)
+		_create_pickup_visual(pickup, pickup_type)
+		pickups.append(pickup)
+		pickup_homes.append(pickup.position)
+		pickup_types.append(pickup_type)
+
+func _create_pickup_visual(pickup: Node3D, pickup_type: String) -> void:
+	var icon_color := Color(1.0, 0.78, 0.15)
+	if pickup_type == "magnet":
+		icon_color = Color(0.95, 0.22, 0.48)
+		pickup.add_child(MeshKit.box(Vector3(0.16, 0.62, 0.18), Vector3(-0.3, 0, 0), icon_color))
+		pickup.add_child(MeshKit.box(Vector3(0.16, 0.62, 0.18), Vector3(0.3, 0, 0), icon_color))
+		pickup.add_child(MeshKit.box(Vector3(0.76, 0.16, 0.18), Vector3(0, -0.28, 0), icon_color))
+	elif pickup_type == "flight":
+		icon_color = Color(0.75, 0.42, 1.0)
+		var wing_l := MeshKit.box(Vector3(0.95, 0.12, 0.38), Vector3(-0.48, 0, 0), icon_color)
+		var wing_r := MeshKit.box(Vector3(0.95, 0.12, 0.38), Vector3(0.48, 0, 0), icon_color)
+		wing_l.rotation_degrees.z = -18.0
+		wing_r.rotation_degrees.z = 18.0
+		pickup.add_child(wing_l)
+		pickup.add_child(wing_r)
+	else:
+		var coin := MeshKit.cylinder(0.42, 0.16, Vector3.ZERO, icon_color)
+		coin.rotation_degrees.x = 90.0
+		pickup.add_child(coin)
 
 func _create_player() -> void:
 	player = CharacterBody3D.new()
 	player.name = "PlayerAnchor"
-	player.position = Vector3(-4.2, 0, 4)
+	player.position = Vector3(0, 0, 4)
 	add_child(player)
 	var collision := CollisionShape3D.new()
 	var shape := BoxShape3D.new()
@@ -128,8 +174,27 @@ func _create_player() -> void:
 	wolf_riding.rotation_degrees.y = 180.0
 	player.add_child(wolf_riding)
 	_set_active_wolf(wolf_standing)
+	_create_flight_fx()
 	_connect_vehicle_parts()
 
+func _create_flight_fx() -> void:
+	var fx := Node3D.new()
+	fx.name = "FlightFX"
+	player.add_child(fx)
+	var wing_l := MeshKit.box(Vector3(1.65, 0.12, 0.48), Vector3(-1.05, 0.85, 0.0), Color(0.72, 0.42, 0.98), Color(0.5, 0.2, 0.9))
+	wing_l.name = "WingLeft"
+	wing_l.rotation_degrees.z = -12.0
+	fx.add_child(wing_l)
+	var wing_r := MeshKit.box(Vector3(1.65, 0.12, 0.48), Vector3(1.05, 0.85, 0.0), Color(0.72, 0.42, 0.98), Color(0.5, 0.2, 0.9))
+	wing_r.name = "WingRight"
+	wing_r.rotation_degrees.z = 12.0
+	fx.add_child(wing_r)
+	var exhaust := MeshKit.box(Vector3(0.55, 0.55, 2.2), Vector3(0, 0.48, 1.75), Color(0.92, 0.48, 0.12), Color(1.0, 0.25, 0.05))
+	exhaust.name = "Exhaust"
+	fx.add_child(exhaust)
+	wing_l.visible = false
+	wing_r.visible = false
+	exhaust.visible = false
 
 func _set_active_wolf(active_wolf: Node3D) -> void:
 	wolf = active_wolf
@@ -138,7 +203,6 @@ func _set_active_wolf(active_wolf: Node3D) -> void:
 	wolf_head = wolf.find_child("HeadPivot", true, false) as Node3D
 	scarf_tail = wolf.find_child("ScarfTailPivot", true, false) as Node3D
 	scarf_base = -30.0 if active_wolf == wolf_riding else -24.0
-
 
 func _connect_vehicle_parts() -> void:
 	front_wheel_pivots.clear()

@@ -1,7 +1,6 @@
 class_name CityKit
 extends RefCounted
 
-
 static func attach_road(world_pivot: Node3D) -> void:
 	world_pivot.add_child(MeshKit.box(Vector3(28, 0.4, 180), Vector3(0, -0.38, -70), Color(0.09, 0.09, 0.1)))
 	world_pivot.add_child(MeshKit.box(Vector3(11.4, 0.18, 180), Vector3(0, -0.18, -70), Color(0.12, 0.12, 0.13)))
@@ -9,10 +8,10 @@ static func attach_road(world_pivot: Node3D) -> void:
 	world_pivot.add_child(MeshKit.box(Vector3(2.4, 0.22, 180), Vector3(7.2, -0.12, -70), Color(0.22, 0.21, 0.2)))
 	world_pivot.add_child(MeshKit.box(Vector3(0.12, 0.06, 180), Vector3(-5.55, 0.02, -70), Color(0.82, 0.78, 0.55), Color(0.55, 0.45, 0.15)))
 	world_pivot.add_child(MeshKit.box(Vector3(0.12, 0.06, 180), Vector3(5.55, 0.02, -70), Color(0.82, 0.78, 0.55), Color(0.55, 0.45, 0.15)))
-	for x in [-1.75, 1.75]:
+	# Four dashed separators create five playable lanes.
+	for x in [-3.45, -1.15, 1.15, 3.45]:
 		for z in range(-150, 20, 7):
-			world_pivot.add_child(MeshKit.box(Vector3(0.12, 0.03, 2.6), Vector3(x, 0.01, float(z)), Color(0.78, 0.76, 0.68)))
-
+			world_pivot.add_child(MeshKit.box(Vector3(0.10, 0.03, 2.6), Vector3(x, 0.01, float(z)), Color(0.78, 0.76, 0.68)))
 
 static func attach_building(world_pivot: Node3D, x: float, z: float, width: float, height: float, depth: float, variant: int) -> Node3D:
 	var building := Node3D.new()
@@ -38,7 +37,6 @@ static func attach_building(world_pivot: Node3D, x: float, z: float, width: floa
 		building.add_child(MeshKit.box(Vector3(width * 0.7, 1.6, 0.12), Vector3(0, height * 0.62, depth * 0.5 + 0.2), Color(0.08, 0.08, 0.08), window_color * 0.4))
 	return building
 
-
 static func attach_lamps(world_pivot: Node3D) -> Array:
 	var lamps: Array = []
 	for z in range(-140, 16, 18):
@@ -59,32 +57,48 @@ static func attach_lamps(world_pivot: Node3D) -> Array:
 			lamps.append(lamp)
 	return lamps
 
-
 static func attach_ramp(world_pivot: Node3D, position: Vector3) -> Node3D:
 	var ramp := Node3D.new()
 	ramp.name = "Ramp"
-	ramp.position = position
+	# High-visibility ramp: bright deck, cyan center stripe and red edge markers.
+	ramp.position = position + Vector3(0.0, 0.12, 0.0)
 	world_pivot.add_child(ramp)
-	var deck := MeshKit.box(Vector3(3.1, 0.42, 8.2), Vector3(0, 0.38, 0), Color(0.55, 0.16, 0.12))
+	var deck := MeshKit.box(Vector3(2.45, 0.26, 8.2), Vector3(0, 0.22, 0), Color(0.34, 0.12, 0.09), Color(0.10, 0.025, 0.015))
 	deck.rotation_degrees.x = 11.0
 	ramp.add_child(deck)
-	for x in [-1.5, 1.5]:
-		var rail := MeshKit.box(Vector3(0.14, 0.55, 8.2), Vector3(x, 0.5, 0), Color(0.75, 0.75, 0.72))
+	var center_strip := MeshKit.box(Vector3(1.28, 0.07, 7.65), Vector3(0, 0.40, 0), Color(0.10, 0.48, 0.58), Color(0.05, 0.85, 1.0))
+	center_strip.rotation_degrees.x = 11.0
+	ramp.add_child(center_strip)
+	for x in [-1.16, 1.16]:
+		var edge := MeshKit.box(Vector3(0.12, 0.12, 8.2), Vector3(x, 0.38, 0), Color(0.95, 0.18, 0.08), Color(0.95, 0.08, 0.02))
+		edge.rotation_degrees.x = 11.0
+		ramp.add_child(edge)
+	for x in [-1.02, 1.02]:
+		var rail := MeshKit.box(Vector3(0.08, 0.36, 8.2), Vector3(x, 0.47, 0), Color(0.72, 0.72, 0.68), Color(0.12, 0.12, 0.12))
 		rail.rotation_degrees.x = 11.0
+		rail.set_meta("ramp_rail", true)
 		ramp.add_child(rail)
 	return ramp
-
 
 static func make_car(car_lane: int, z: float, color: Color, lane_x: Array) -> Node3D:
 	var car := Node3D.new()
 	car.position = Vector3(lane_x[car_lane], 0, z)
 	car.set_meta("lane", car_lane)
-	car.add_child(MeshKit.box(Vector3(2.05, 0.72, 4.3), Vector3(0, 0.62, 0), color))
-	car.add_child(MeshKit.box(Vector3(1.7, 0.58, 2.0), Vector3(0, 1.18, -0.15), Color(0.08, 0.1, 0.12)))
-	car.add_child(MeshKit.box(Vector3(0.38, 0.14, 0.08), Vector3(-0.62, 0.62, -2.18), Color(1.0, 0.92, 0.7), Color(1.0, 0.9, 0.55)))
-	car.add_child(MeshKit.box(Vector3(0.38, 0.14, 0.08), Vector3(0.62, 0.62, -2.18), Color(1.0, 0.92, 0.7), Color(1.0, 0.9, 0.55)))
-	car.add_child(MeshKit.box(Vector3(0.42, 0.14, 0.08), Vector3(-0.62, 0.68, 2.16), Color(0.85, 0.12, 0.1), Color(0.7, 0.05, 0.05)))
-	car.add_child(MeshKit.box(Vector3(0.42, 0.14, 0.08), Vector3(0.62, 0.68, 2.16), Color(0.85, 0.12, 0.1), Color(0.7, 0.05, 0.05)))
+	# Strong self-lit silhouette: every traffic car remains readable in dark city sections.
+	var body_color := color.lightened(0.38)
+	var body_emission := body_color * 0.22
+	car.add_child(MeshKit.box(Vector3(2.15, 0.82, 4.3), Vector3(0, 0.66, 0), body_color, body_emission))
+	car.add_child(MeshKit.box(Vector3(1.72, 0.62, 2.0), Vector3(0, 1.24, -0.15), Color(0.14, 0.18, 0.22), Color(0.12, 0.38, 0.48)))
+	# Bright roof bar + side markers prevent silhouette loss at distance.
+	car.add_child(MeshKit.box(Vector3(1.45, 0.12, 2.55), Vector3(0, 1.56, -0.05), Color(1.0, 0.72, 0.10), Color(1.0, 0.55, 0.04)))
+	car.add_child(MeshKit.box(Vector3(0.10, 0.10, 2.65), Vector3(-1.08, 0.82, 0), Color(0.2, 0.85, 1.0), Color(0.1, 0.9, 1.0)))
+	car.add_child(MeshKit.box(Vector3(0.10, 0.10, 2.65), Vector3(1.08, 0.82, 0), Color(0.2, 0.85, 1.0), Color(0.1, 0.9, 1.0)))
+	car.add_child(MeshKit.box(Vector3(0.50, 0.16, 0.10), Vector3(-0.68, 0.68, -2.18), Color(1.0, 0.98, 0.84), Color(1.0, 0.95, 0.62)))
+	car.add_child(MeshKit.box(Vector3(0.50, 0.16, 0.10), Vector3(0.68, 0.68, -2.18), Color(1.0, 0.98, 0.84), Color(1.0, 0.95, 0.62)))
+	car.add_child(MeshKit.box(Vector3(0.48, 0.16, 0.10), Vector3(-0.68, 0.72, 2.16), Color(0.95, 0.16, 0.10), Color(0.85, 0.05, 0.03)))
+	car.add_child(MeshKit.box(Vector3(0.48, 0.16, 0.10), Vector3(0.68, 0.72, 2.16), Color(0.95, 0.16, 0.10), Color(0.85, 0.05, 0.03)))
 	for wheel_pos in [Vector3(-0.9, 0.28, 1.35), Vector3(0.9, 0.28, 1.35), Vector3(-0.9, 0.28, -1.35), Vector3(0.9, 0.28, -1.35)]:
-		car.add_child(MeshKit.cylinder(0.28, 0.22, wheel_pos, Color(0.06, 0.06, 0.06)))
+		var wheel := MeshKit.cylinder(0.30, 0.24, wheel_pos, Color(0.06, 0.06, 0.06))
+		wheel.set_meta("traffic_wheel", true)
+		car.add_child(wheel)
 	return car
