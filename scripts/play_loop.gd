@@ -13,6 +13,8 @@ static func animate_wolf(g: Node) -> void:
 		return
 	var delta: float = g.get_physics_process_delta_time()
 	if g.game_state == g.GameState.ROADSIDE_IDLE:
+		# Keep the parked quad centered; the standing wolf remains beside it.
+		g.player.position = Vector3(0.0, 0.0, 4.0)
 		g.wolf.position.y = sin(g.elapsed_time * 1.55) * 0.028
 		g.wolf.rotation_degrees.z = sin(g.elapsed_time * 0.55) * 1.8
 		g.wolf.rotation_degrees.x = sin(g.elapsed_time * 0.8) * 1.2
@@ -125,6 +127,7 @@ static func update_running(g: Node, delta: float) -> void:
 	if not g.jumping and g.flight_remaining <= 0.0:
 		g.vehicle_visual.position.y = lerpf(g.vehicle_visual.position.y, sin(g.elapsed_time * current_speed * 0.55) * 0.018, min(1.0, delta * 10.0))
 	g._update_camera(delta)
+	g.message_time = 0.0
 	g._update_hud(delta)
 
 static func _update_pickups(g: Node, delta: float, current_speed: float) -> void:
