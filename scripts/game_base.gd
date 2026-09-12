@@ -78,7 +78,6 @@ var pickup_types: Array[String] = []
 var pickups: Array[Node3D] = []
 var ramp_home := Vector3(0, 0, -55)
 
-
 func _create_world() -> void:
 	world_pivot = Node3D.new()
 	world_pivot.name = "WorldPivot"
@@ -113,9 +112,9 @@ func _create_world() -> void:
 		traffic_homes.append(car.position)
 		traffic_home_lanes.append(int(spec[0]))
 
-
 func _create_pickups() -> void:
-	var types := ["coin", "coin", "shield", "coin", "magnet", "coin", "coin", "coin", "boost", "coin", "coin", "shield", "coin", "coin", "magnet", "coin", "boost", "coin", "coin", "coin", "coin", "coin", "coin", "flight"]
+	# Only the four requested pickup families remain: coins, magnet, flight and the existing non-visual shield logic is disabled.
+	var types := ["coin", "coin", "magnet", "coin", "coin", "flight", "coin", "magnet", "coin", "coin", "coin", "flight", "coin", "magnet", "coin", "coin", "coin", "flight", "coin", "coin"]
 	for index in range(types.size()):
 		var pickup_type: String = types[index]
 		var pickup := Node3D.new()
@@ -129,24 +128,13 @@ func _create_pickups() -> void:
 		pickup_homes.append(pickup.position)
 		pickup_types.append(pickup_type)
 
-
 func _create_pickup_visual(pickup: Node3D, pickup_type: String) -> void:
 	var icon_color := Color(1.0, 0.78, 0.15)
-	if pickup_type == "shield":
-		icon_color = Color(0.25, 0.72, 1.0)
-		pickup.add_child(MeshKit.cylinder(0.5, 0.16, Vector3(0, 0, 0), icon_color))
-		pickup.add_child(MeshKit.box(Vector3(0.58, 0.12, 0.16), Vector3(0, 0, -0.32), Color(0.7, 0.9, 1.0)))
-	elif pickup_type == "magnet":
+	if pickup_type == "magnet":
 		icon_color = Color(0.95, 0.22, 0.48)
 		pickup.add_child(MeshKit.box(Vector3(0.16, 0.62, 0.18), Vector3(-0.3, 0, 0), icon_color))
 		pickup.add_child(MeshKit.box(Vector3(0.16, 0.62, 0.18), Vector3(0.3, 0, 0), icon_color))
 		pickup.add_child(MeshKit.box(Vector3(0.76, 0.16, 0.18), Vector3(0, -0.28, 0), icon_color))
-	elif pickup_type == "boost":
-		icon_color = Color(1.0, 0.38, 0.08)
-		var bolt := MeshKit.box(Vector3(0.22, 0.9, 0.22), Vector3(0, 0, 0), icon_color, Color(1.0, 0.85, 0.2))
-		bolt.rotation_degrees.z = 35.0
-		pickup.add_child(bolt)
-		pickup.add_child(MeshKit.box(Vector3(0.7, 0.12, 0.12), Vector3(0, 0.18, 0), Color(1.0, 0.85, 0.2)))
 	elif pickup_type == "flight":
 		icon_color = Color(0.75, 0.42, 1.0)
 		var wing_l := MeshKit.box(Vector3(0.95, 0.12, 0.38), Vector3(-0.48, 0, 0), icon_color)
@@ -159,7 +147,6 @@ func _create_pickup_visual(pickup: Node3D, pickup_type: String) -> void:
 		var coin := MeshKit.cylinder(0.42, 0.16, Vector3.ZERO, icon_color)
 		coin.rotation_degrees.x = 90.0
 		pickup.add_child(coin)
-
 
 func _create_player() -> void:
 	player = CharacterBody3D.new()
@@ -190,7 +177,6 @@ func _create_player() -> void:
 	_create_flight_fx()
 	_connect_vehicle_parts()
 
-
 func _create_flight_fx() -> void:
 	var fx := Node3D.new()
 	fx.name = "FlightFX"
@@ -210,7 +196,6 @@ func _create_flight_fx() -> void:
 	wing_r.visible = false
 	exhaust.visible = false
 
-
 func _set_active_wolf(active_wolf: Node3D) -> void:
 	wolf = active_wolf
 	wolf_standing.visible = active_wolf == wolf_standing
@@ -218,7 +203,6 @@ func _set_active_wolf(active_wolf: Node3D) -> void:
 	wolf_head = wolf.find_child("HeadPivot", true, false) as Node3D
 	scarf_tail = wolf.find_child("ScarfTailPivot", true, false) as Node3D
 	scarf_base = -30.0 if active_wolf == wolf_riding else -24.0
-
 
 func _connect_vehicle_parts() -> void:
 	front_wheel_pivots.clear()
