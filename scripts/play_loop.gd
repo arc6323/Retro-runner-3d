@@ -59,7 +59,7 @@ static func update_mounting(g: Node, delta: float) -> void:
 	if t >= 1.0:
 		g.game_state = g.GameState.MERGING
 		g.transition_time = 0.0
-		g.wolf_riding.position = Vector3.ZERO
+	g.wolf_riding.position = Vector3.ZERO
 		g.wolf_riding.rotation_degrees = Vector3(0, 180, 0)
 		g.title.visible = false
 		g.prompt.visible = false
@@ -77,7 +77,6 @@ static func update_merging(g: Node, delta: float) -> void:
 		g.vehicle_visual.rotation_degrees.z = 0.0
 		g.hud.visible = true
 		g.set_meta("run_grace_remaining", RUN_START_GRACE)
-		# First three seconds: only the two outer lanes contain traffic.
 		for car in g.traffic:
 			var start_lane: int = 0 if g.rng.randi_range(0, 1) == 0 else 4
 			car.set_meta("lane", start_lane)
@@ -144,9 +143,14 @@ static func _update_ramp_and_jump(g: Node, delta: float) -> void:
 	if g.jumping:
 		g.jump_velocity -= g.jump_gravity * delta
 		g.player.position.y += g.jump_velocity * delta
-		g.trick_angle += (560.0 if g.trick_requested else 280.0) * delta
-		g.vehicle_visual.rotation_degrees.x = g.trick_angle
-		g.wolf.rotation_degrees.x = g.trick_angle * 0.92
+		if g.trick_requested:
+			g.trick_angle += 560.0 * delta
+			g.vehicle_visual.rotation_degrees.x = g.trick_angle
+			g.wolf.rotation_degrees.x = g.trick_angle * 0.92
+		else:
+			g.trick_angle = 0.0
+			g.vehicle_visual.rotation_degrees.x = 0.0
+			g.wolf.rotation_degrees.x = 0.0
 		if g.player.position.y <= 0.0 and g.jump_velocity < 0.0:
 			g.player.position.y = 0.0
 			g.jumping = false
@@ -162,7 +166,6 @@ static func _update_ramp_and_jump(g: Node, delta: float) -> void:
 	if not _ramp_under_player(g) or g.lane != g.ramp_lane:
 		return
 
-	# The deck rises toward positive Z, exactly in the direction of travel.
 	var local_z: float = g.player.position.z - g.ramp.position.z
 	var angle_rad: float = deg_to_rad(RAMP_ANGLE_DEG)
 	var surface_y: float = g.ramp.position.y + RAMP_TOP_Y * cos(angle_rad) + local_z * sin(angle_rad)
@@ -198,7 +201,7 @@ static func _update_pickups(g: Node, delta: float, current_speed: float) -> void
 			if distance_to_player < MAGNET_RANGE:
 				pickup.position.x = lerpf(pickup.position.x, player_local_x, min(1.0, delta * 8.0))
 				pickup.position.z = lerpf(pickup.position.z, player_z, min(1.0, delta * 8.0))
-		pickup.position.z += current_speed * delta
+			pickup.position.z += current_speed * delta
 		var hit_distance: float = Vector2(pickup.position.x - player_local_x, pickup.position.z - player_z).length()
 		if hit_distance < (1.15 if pickup_type == "coin" else 1.45) and abs(pickup.position.y - g.player.position.y) < 2.0:
 			_collect_pickup(g, index)
@@ -244,12 +247,13 @@ static func _update_powerup_visuals(g: Node, delta: float) -> void:
 	var flight_on: bool = g.flight_remaining > 0.0
 	if wing_l != null:
 		wing_l.visible = flight_on
+		wing_l.scale = Vector3.ONE * 0.58
 	if wing_r != null:
 		wing_r.visible = flight_on
+		wing_r.scale = Vector3.ONE * 0.58
 	if exhaust != null:
 		exhaust.visible = flight_on
-		if flight_on:
-			exhaust.scale = Vector3(1.0, 1.0, 1.0 + sin(g.elapsed_time * 28.0) * 0.28)
+		exhaust.scale = Vector3(0.62, 0.62, 0.62 + (sin(g.elapsed_time * 28.0) * 0.08 if flight_on else 0.0))
 
 static func scroll(nodes: Array, front_z: float, recycle: float, step: float) -> void:
 	for node in nodes:
@@ -344,13 +348,10 @@ static func update_crash(g: Node, delta: float) -> void:
 	g.crash_time += delta
 	var t: float = clampf(g.crash_time / 1.15, 0.0, 1.0)
 	var eased: float = smoothstep(0.0, 1.0, t)
-	# The quad remains planted where the collision happened.
 	g.vehicle_visual.rotation_degrees = Vector3(0.0, 180.0, 0.0)
-	# Red falls forward off the quad.
 	if g.wolf_riding != null:
 		g.wolf_riding.position = Vector3(0.0, lerpf(0.02, -0.18, eased), lerpf(0.0, -1.55, eased))
 		g.wolf_riding.rotation_degrees = Vector3(lerpf(0.0, -78.0, eased), 180.0, lerpf(0.0, -8.0, eased))
-	# The car recoils forward and flips over.
 	if g.crash_car != null:
 		g.crash_car.position.z += lerpf(0.8, 2.8, eased) * delta
 		g.crash_car.rotation_degrees.x += 520.0 * delta
