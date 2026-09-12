@@ -4,6 +4,8 @@ extends RefCounted
 const SPEED_MULTIPLIER := 3.0
 const TRAFFIC_RAMP_CLEARANCE := 10.0
 const RUN_START_GRACE := 1.35
+const PICKUP_RECYCLE_Z := 24.0
+const MAGNET_RANGE := 8.0
 
 static func animate_wolf(g: Node) -> void:
 	if g.wolf == null:
@@ -66,18 +68,19 @@ static func update_merging(g: Node, delta: float) -> void:
 		g._show_message("ПОЕХАЛИ!", 1.0)
 
 static func update_running(g: Node, delta: float) -> void:
-	# Speed starts at the requested 3x baseline and then ramps up gradually.
-	# The cap keeps the late game fast without turning it into uncontrollable teleportation.
 	var speed_ramp: float = min(g.distance * 0.0025, 8.0)
 	var normal_speed: float = g.BASE_SPEED + speed_ramp
 	var boost_speed: float = g.BOOST_SPEED + min(g.distance * 0.002, 6.0)
 	var current_speed: float = (boost_speed if g.boost_remaining > 0.0 else normal_speed) * SPEED_MULTIPLIER
 	g.boost_remaining = max(0.0, g.boost_remaining - delta)
+	g.shield_remaining = max(0.0, g.shield_remaining - delta)
+	g.magnet_remaining = max(0.0, g.magnet_remaining - delta)
+	g.flight_remaining = max(0.0, g.flight_remaining - delta)
 	var grace: float = float(g.get_meta("run_grace_remaining", 0.0))
 	if grace > 0.0:
 		g.set_meta("run_grace_remaining", max(0.0, grace - delta))
 	g.distance += current_speed * delta
-	g.score = int(g.distance) + g.trick_score
+	g.score = int(g.distance) + g.trick_score + g.coins * 5
 	scroll(g.buildings, 22.0, 156.0, current_speed * delta)
 	scroll(g.props, 22.0, 168.0, current_speed * delta)
 	g.ramp.position.z += current_speed * delta
@@ -86,15 +89,109 @@ static func update_running(g: Node, delta: float) -> void:
 		g.ramp_lane = g.rng.randi_range(0, 2)
 		g.ramp.position.x = g.LANE_X[g.ramp_lane]
 		g.ramp_used = false
+	_update_pickups(g, delta, current_speed)
 	g._move_traffic(delta, current_speed * 0.72, true)
+	if g.flight_remaining > 0.0:
+		g.player.position.y = lerpf(g.player.position.y, 2.8, min(1.0, delta * 7.0))
+	elif not g.jumping and g.player.position.y > 0.0:
+		g.player.position.y = lerpf(g.player.position.y, 0.0, min(1.0, delta * 8.0))
 	g._update_world_shift(delta)
+	# Keep the road/vehicle visually level. Steering is shown by the wheels, not by a tilted horizon.
+	g.vehicle_visual.rotation_degrees.z = 0.0
+	if g.wolf != null and not g.jumping:
+		g.wolf.rotation_degrees.z = 0.0
+	var trick_before_jump: bool = g.trick_requested
 	g._update_jump(delta)
+	# A ramp no longer performs an automatic flip. A tap during the jump arms the trick.
+	if g.jumping and not trick_before_jump:
+		g.trick_angle = 0.0
+		g.vehicle_visual.rotation_degrees.x = 0.0
+		g.wolf.rotation_degrees.x = 0.0
+	_update_powerup_visuals(g, delta)
 	for spin_pivot in g.wheel_spin_pivots:
 		spin_pivot.rotate_x(current_speed * delta * 1.7)
-	if not g.jumping:
+	if not g.jumping and g.flight_remaining <= 0.0:
 		g.vehicle_visual.position.y = lerpf(g.vehicle_visual.position.y, sin(g.elapsed_time * current_speed * 0.55) * 0.018, min(1.0, delta * 10.0))
 	g._update_camera(delta)
 	g._update_hud(delta)
+	if g.message_time <= 0.0:
+		var status: String = "МОНЕТЫ %03d" % g.coins
+		if g.shield_remaining > 0.0:
+			status += "  •  ЩИТ"
+		if g.magnet_remaining > 0.0:
+			status += "  •  МАГНИТ"
+		if g.flight_remaining > 0.0:
+			status += "  •  ПОЛЁТ"
+		g.hud.text += "\n" + status
+
+static func _update_pickups(g: Node, delta: float, current_speed: float) -> void:
+	var player_local_x: float = -g.world_pivot.position.x
+	var player_z: float = g.player.position.z
+	for index in g.pickups.size():
+		var pickup: Node3D = g.pickups[index]
+		if not pickup.visible:
+			continue
+		var pickup_type: String = g.pickup_types[index]
+		if g.magnet_remaining > 0.0 and pickup_type == "coin":
+			var distance_to_player: float = Vector2(pickup.position.x - player_local_x, pickup.position.z - player_z).length()
+			if distance_to_player < MAGNET_RANGE:
+				pickup.position.x = lerpf(pickup.position.x, player_local_x, min(1.0, delta * 8.0))
+				pickup.position.z = lerpf(pickup.position.z, player_z, min(1.0, delta * 8.0))
+		pickup.position.z += current_speed * delta
+		var hit_distance: float = Vector2(pickup.position.x - player_local_x, pickup.position.z - player_z).length()
+		if hit_distance < (1.15 if pickup_type == "coin" else 1.45) and abs(pickup.position.y - g.player.position.y) < 2.0:
+			_collect_pickup(g, index)
+			continue
+		if pickup.position.z > PICKUP_RECYCLE_Z:
+			pickup.position = g.pickup_homes[index]
+			pickup.position.x = g.LANE_X[g.rng.randi_range(0, 2)]
+
+static func _collect_pickup(g: Node, index: int) -> void:
+	var pickup: Node3D = g.pickups[index]
+	var pickup_type: String = g.pickup_types[index]
+	pickup.position = g.pickup_homes[index]
+	pickup.position.x = g.LANE_X[g.rng.randi_range(0, 2)]
+	if pickup_type == "coin":
+		g.coins += 1
+		g._show_message("МОНЕТА +1", 0.35)
+	elif pickup_type == "shield":
+		g.shield_remaining = 7.0
+		g._show_message("ЩИТ!", 0.65)
+	elif pickup_type == "magnet":
+		g.magnet_remaining = 7.0
+		g._show_message("МАГНИТ!", 0.65)
+	elif pickup_type == "boost":
+		g.boost_remaining = 2.5
+		g._show_message("УСКОРЕНИЕ!", 0.65)
+	elif pickup_type == "flight":
+		g.flight_remaining = 4.5
+		g.jumping = false
+		g.jump_velocity = 0.0
+		g.trick_requested = false
+		g.vehicle_visual.rotation_degrees.x = 0.0
+		g.wolf.rotation_degrees.x = 0.0
+		g.player.position.y = 2.8
+		g._show_message("ПОЛЁТ!", 0.8)
+
+static func _update_powerup_visuals(g: Node, delta: float) -> void:
+	for index in g.pickups.size():
+		var pickup: Node3D = g.pickups[index]
+		if pickup == null:
+			continue
+		pickup.rotation_degrees.y += 110.0 * delta
+		pickup.position.y = (0.9 if g.pickup_types[index] == "coin" else 1.05) + sin(g.elapsed_time * 4.0 + float(index)) * 0.08
+	var wing_l: Node3D = g.player.get_node_or_null("FlightFX/WingLeft") as Node3D
+	var wing_r: Node3D = g.player.get_node_or_null("FlightFX/WingRight") as Node3D
+	var exhaust: Node3D = g.player.get_node_or_null("FlightFX/Exhaust") as Node3D
+	var flight_on: bool = g.flight_remaining > 0.0
+	if wing_l != null:
+		wing_l.visible = flight_on
+	if wing_r != null:
+		wing_r.visible = flight_on
+	if exhaust != null:
+		exhaust.visible = flight_on
+		if flight_on:
+			exhaust.scale = Vector3(1.0, 1.0, 1.0 + sin(g.elapsed_time * 28.0) * 0.28)
 
 static func scroll(nodes: Array, front_z: float, recycle: float, step: float) -> void:
 	for node in nodes:
@@ -121,7 +218,7 @@ static func move_traffic(g: Node, delta: float, movement_speed: float, check_col
 			car_lane = _choose_safe_traffic_lane(g, car_lane)
 			car.set_meta("lane", car_lane)
 			car.set_meta("target_lane", car_lane)
-		car.position.x = g.LANE_X[car_lane]
+			car.position.x = g.LANE_X[car_lane]
 
 		car.position.z += movement_speed * delta
 		if car.position.z > 18.0:
@@ -140,13 +237,18 @@ static func move_traffic(g: Node, delta: float, movement_speed: float, check_col
 				wheel.rotate_x(movement_speed * delta * 1.9)
 
 		var grace: float = float(g.get_meta("run_grace_remaining", 0.0))
-		if check_collision and grace <= 0.0 and not g.jumping:
+		if check_collision and grace <= 0.0 and g.flight_remaining <= 0.0 and not g.jumping:
 			var player_pos: Vector3 = g.player.global_position
 			var car_pos: Vector3 = car.global_position
 			var horizontal_distance: float = Vector2(player_pos.x - car_pos.x, player_pos.z - car_pos.z).length()
 			var vertical_distance: float = abs(player_pos.y - car_pos.y)
 			if horizontal_distance < 1.55 and vertical_distance < 1.35:
-				g._game_over()
+				if g.shield_remaining > 0.0:
+					g.shield_remaining = 0.0
+					g.camera_shake = 0.8
+					g._show_message("ЩИТ СПАС!", 0.9)
+				else:
+					g._game_over()
 				return
 
 static func update_world_shift(g: Node, delta: float) -> void:
@@ -159,6 +261,6 @@ static func update_world_shift(g: Node, delta: float) -> void:
 		g.steer_visual = lerpf(g.steer_visual, 0.0, min(1.0, delta * 10.0))
 	for pivot in g.front_wheel_pivots:
 		pivot.rotation_degrees.y = g.steer_visual
-	g.vehicle_visual.rotation_degrees.z = -g.steer_visual * 0.16
+	g.vehicle_visual.rotation_degrees.z = 0.0
 	if g.wolf != null:
-		g.wolf.rotation_degrees.z = -g.steer_visual * 0.28
+		g.wolf.rotation_degrees.z = 0.0
