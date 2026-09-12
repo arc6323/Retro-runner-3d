@@ -60,19 +60,21 @@ static func attach_lamps(world_pivot: Node3D) -> Array:
 static func attach_ramp(world_pivot: Node3D, position: Vector3) -> Node3D:
 	var ramp := Node3D.new()
 	ramp.name = "Ramp"
-	# Low-profile road-colored ramp: it should read as part of the track, not a red wall.
-	ramp.position = position + Vector3(0.0, 0.20, 0.0)
+	# High-visibility ramp: bright deck, cyan center stripe and red edge markers.
+	ramp.position = position + Vector3(0.0, 0.12, 0.0)
 	world_pivot.add_child(ramp)
-	var deck := MeshKit.box(Vector3(2.18, 0.24, 8.2), Vector3(0, 0.22, 0), Color(0.16, 0.14, 0.14))
+	var deck := MeshKit.box(Vector3(2.45, 0.26, 8.2), Vector3(0, 0.22, 0), Color(0.34, 0.12, 0.09), Color(0.10, 0.025, 0.015))
 	deck.rotation_degrees.x = 11.0
 	ramp.add_child(deck)
-	# Thin red edge accents keep the Soviet-retrofuturist style without filling the screen.
-	for x in [-1.02, 1.02]:
-		var edge := MeshKit.box(Vector3(0.08, 0.08, 8.2), Vector3(x, 0.36, 0), Color(0.62, 0.12, 0.09))
+	var center_strip := MeshKit.box(Vector3(1.28, 0.07, 7.65), Vector3(0, 0.40, 0), Color(0.10, 0.48, 0.58), Color(0.05, 0.85, 1.0))
+	center_strip.rotation_degrees.x = 11.0
+	ramp.add_child(center_strip)
+	for x in [-1.16, 1.16]:
+		var edge := MeshKit.box(Vector3(0.12, 0.12, 8.2), Vector3(x, 0.38, 0), Color(0.95, 0.18, 0.08), Color(0.95, 0.08, 0.02))
 		edge.rotation_degrees.x = 11.0
 		ramp.add_child(edge)
-	for x in [-0.98, 0.98]:
-		var rail := MeshKit.box(Vector3(0.07, 0.32, 8.2), Vector3(x, 0.42, 0), Color(0.58, 0.58, 0.56))
+	for x in [-1.02, 1.02]:
+		var rail := MeshKit.box(Vector3(0.08, 0.36, 8.2), Vector3(x, 0.47, 0), Color(0.72, 0.72, 0.68), Color(0.12, 0.12, 0.12))
 		rail.rotation_degrees.x = 11.0
 		rail.set_meta("ramp_rail", true)
 		ramp.add_child(rail)
@@ -82,14 +84,18 @@ static func make_car(car_lane: int, z: float, color: Color, lane_x: Array) -> No
 	var car := Node3D.new()
 	car.position = Vector3(lane_x[car_lane], 0, z)
 	car.set_meta("lane", car_lane)
-	car.add_child(MeshKit.box(Vector3(2.05, 0.72, 4.3), Vector3(0, 0.62, 0), color))
-	car.add_child(MeshKit.box(Vector3(1.7, 0.58, 2.0), Vector3(0, 1.18, -0.15), Color(0.08, 0.1, 0.12)))
-	car.add_child(MeshKit.box(Vector3(0.38, 0.14, 0.08), Vector3(-0.62, 0.62, -2.18), Color(1.0, 0.92, 0.7), Color(1.0, 0.9, 0.55)))
-	car.add_child(MeshKit.box(Vector3(0.38, 0.14, 0.08), Vector3(0.62, 0.62, -2.18), Color(1.0, 0.92, 0.7), Color(1.0, 0.9, 0.55)))
-	car.add_child(MeshKit.box(Vector3(0.42, 0.14, 0.08), Vector3(-0.62, 0.68, 2.16), Color(0.85, 0.12, 0.1), Color(0.7, 0.05, 0.05)))
-	car.add_child(MeshKit.box(Vector3(0.42, 0.14, 0.08), Vector3(0.62, 0.68, 2.16), Color(0.85, 0.12, 0.1), Color(0.7, 0.05, 0.05)))
+	# Brighter silhouette so traffic remains readable against dark city streets.
+	var body_color := color.lightened(0.28)
+	car.add_child(MeshKit.box(Vector3(2.15, 0.82, 4.3), Vector3(0, 0.66, 0), body_color, body_color * 0.12))
+	car.add_child(MeshKit.box(Vector3(1.72, 0.62, 2.0), Vector3(0, 1.24, -0.15), Color(0.12, 0.16, 0.19), Color(0.08, 0.28, 0.38)))
+	# Bright roof stripe makes the right-side car immediately distinguishable.
+	car.add_child(MeshKit.box(Vector3(1.35, 0.10, 2.45), Vector3(0, 1.56, -0.05), Color(0.9, 0.72, 0.18), Color(0.95, 0.5, 0.06)))
+	car.add_child(MeshKit.box(Vector3(0.50, 0.16, 0.10), Vector3(-0.68, 0.68, -2.18), Color(1.0, 0.98, 0.84), Color(1.0, 0.95, 0.62)))
+	car.add_child(MeshKit.box(Vector3(0.50, 0.16, 0.10), Vector3(0.68, 0.68, -2.18), Color(1.0, 0.98, 0.84), Color(1.0, 0.95, 0.62)))
+	car.add_child(MeshKit.box(Vector3(0.48, 0.16, 0.10), Vector3(-0.68, 0.72, 2.16), Color(0.95, 0.16, 0.10), Color(0.85, 0.05, 0.03)))
+	car.add_child(MeshKit.box(Vector3(0.48, 0.16, 0.10), Vector3(0.68, 0.72, 2.16), Color(0.95, 0.16, 0.10), Color(0.85, 0.05, 0.03)))
 	for wheel_pos in [Vector3(-0.9, 0.28, 1.35), Vector3(0.9, 0.28, 1.35), Vector3(-0.9, 0.28, -1.35), Vector3(0.9, 0.28, -1.35)]:
-		var wheel := MeshKit.cylinder(0.28, 0.22, wheel_pos, Color(0.06, 0.06, 0.06))
+		var wheel := MeshKit.cylinder(0.30, 0.24, wheel_pos, Color(0.06, 0.06, 0.06))
 		wheel.set_meta("traffic_wheel", true)
 		car.add_child(wheel)
 	return car
