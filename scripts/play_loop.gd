@@ -60,8 +60,8 @@ static func update_merging(g: Node, delta: float) -> void:
 	g.transition_time += delta
 	var t: float = clampf(g.transition_time / 1.15, 0.0, 1.0)
 	var smooth_t: float = smoothstep(0.0, 1.0, t)
-	# Enter the road with a short forward movement instead of a pure sideways slide.
-	g.player.position.x = lerpf(-4.2, 0.0, smooth_t)
+	# The quad is already centered before the start; only move it forward into the run.
+	g.player.position.x = 0.0
 	g.player.position.z = lerpf(4.0, 0.0, smooth_t)
 	g.vehicle_visual.rotation_degrees.z = 0.0
 	if t >= 1.0:
@@ -70,7 +70,12 @@ static func update_merging(g: Node, delta: float) -> void:
 		g.vehicle_visual.rotation_degrees.z = 0.0
 		g.hud.visible = true
 		g.set_meta("run_grace_remaining", RUN_START_GRACE)
-		g._show_message("ПОЕХАЛИ!", 1.0)
+		# Before start cars are side-only. From this moment they can use any of the three lanes.
+		for car in g.traffic:
+			var start_lane: int = g.rng.randi_range(0, 2)
+			car.set_meta("lane", start_lane)
+			car.set_meta("target_lane", start_lane)
+			car.position.x = g.LANE_X[start_lane]
 
 static func update_running(g: Node, delta: float) -> void:
 	var speed_ramp: float = min(g.distance * 0.0025, 8.0)
@@ -85,7 +90,6 @@ static func update_running(g: Node, delta: float) -> void:
 	g.flight_invulnerability_remaining = max(0.0, g.flight_invulnerability_remaining - delta)
 	if was_flying and g.flight_remaining <= 0.0:
 		g.flight_invulnerability_remaining = FLIGHT_LANDING_INVULNERABILITY
-		g._show_message("ПОСЛЕ ПОЛЁТА: ЗАЩИТА!", 1.0)
 	var grace: float = float(g.get_meta("run_grace_remaining", 0.0))
 	if grace > 0.0:
 		g.set_meta("run_grace_remaining", max(0.0, grace - delta))
@@ -106,7 +110,6 @@ static func update_running(g: Node, delta: float) -> void:
 	elif not g.jumping and g.player.position.y > 0.0:
 		g.player.position.y = lerpf(g.player.position.y, 0.0, min(1.0, delta * 8.0))
 	g._update_world_shift(delta)
-	# Road, camera and vehicle stay level; steering is shown by wheel pivots only.
 	g.vehicle_visual.rotation_degrees.z = 0.0
 	if g.wolf != null and not g.jumping:
 		g.wolf.rotation_degrees.z = 0.0
@@ -122,8 +125,6 @@ static func update_running(g: Node, delta: float) -> void:
 	if not g.jumping and g.flight_remaining <= 0.0:
 		g.vehicle_visual.position.y = lerpf(g.vehicle_visual.position.y, sin(g.elapsed_time * current_speed * 0.55) * 0.018, min(1.0, delta * 10.0))
 	g._update_camera(delta)
-	# Gameplay feedback stays visual; no giant text flashes over the road.
-	g.message_time = 0.0
 	g._update_hud(delta)
 
 static func _update_pickups(g: Node, delta: float, current_speed: float) -> void:
@@ -155,18 +156,13 @@ static func _collect_pickup(g: Node, index: int) -> void:
 	pickup.position.x = g.LANE_X[g.rng.randi_range(0, 2)]
 	if pickup_type == "coin":
 		g.coins += 1
-		g._show_message("МОНЕТА +1", 0.35)
 	elif pickup_type == "shield":
 		g.shield_remaining = 7.0
-		g._show_message("ЩИТ!", 0.65)
 	elif pickup_type == "magnet":
 		g.magnet_remaining = 7.0
-		g._show_message("МАГНИТ!", 0.65)
 	elif pickup_type == "boost":
 		g.boost_remaining = 2.5
-		g._show_message("УСКОРЕНИЕ!", 0.65)
 	elif pickup_type == "flight":
-		# Lock out the current ramp while airborne; the next ramp is active normally.
 		g.ramp_used = true
 		g.flight_remaining = 4.5
 		g.flight_invulnerability_remaining = 0.0
@@ -176,7 +172,6 @@ static func _collect_pickup(g: Node, index: int) -> void:
 		g.vehicle_visual.rotation_degrees.x = 0.0
 		g.wolf.rotation_degrees.x = 0.0
 		g.player.position.y = 2.8
-		g._show_message("ПОЛЁТ!", 0.8)
 
 static func _update_powerup_visuals(g: Node, delta: float) -> void:
 	for index in g.pickups.size():
@@ -221,20 +216,18 @@ static func _choose_safe_traffic_lane(g: Node, current_lane: int) -> int:
 static func move_traffic(g: Node, delta: float, movement_speed: float, check_collision: bool) -> void:
 	for car in g.traffic:
 		var car_lane: int = int(car.get_meta("lane", 0))
-		if car_lane == 1:
+		if g.game_state != g.GameState.RUNNING and car_lane == 1:
 			car_lane = _choose_safe_traffic_lane(g, car_lane)
-		if abs(car.position.z - g.ramp.position.z) < TRAFFIC_RAMP_CLEARANCE and car_lane == g.ramp_lane:
+		if g.game_state != g.GameState.RUNNING and abs(car.position.z - g.ramp.position.z) < TRAFFIC_RAMP_CLEARANCE and car_lane == g.ramp_lane:
 			car_lane = _choose_safe_traffic_lane(g, car_lane)
-			car.set_meta("lane", car_lane)
-			car.set_meta("target_lane", car_lane)
-			car.position.x = g.LANE_X[car_lane]
+		car.set_meta("lane", car_lane)
+		car.set_meta("target_lane", car_lane)
+		car.position.x = g.LANE_X[car_lane]
 
 		car.position.z += movement_speed * delta
 		if car.position.z > 18.0:
 			car.position.z -= 128.0
-			car_lane = 0 if g.rng.randi_range(0, 1) == 0 else 2
-			if abs(car.position.z - g.ramp.position.z) < TRAFFIC_RAMP_CLEARANCE and car_lane == g.ramp_lane:
-				car_lane = _choose_safe_traffic_lane(g, car_lane)
+			car_lane = g.rng.randi_range(0, 2) if g.game_state == g.GameState.RUNNING else (0 if g.rng.randi_range(0, 1) == 0 else 2)
 			car.set_meta("lane", car_lane)
 			car.set_meta("target_lane", car_lane)
 
@@ -255,7 +248,6 @@ static func move_traffic(g: Node, delta: float, movement_speed: float, check_col
 				if g.shield_remaining > 0.0:
 					g.shield_remaining = 0.0
 					g.camera_shake = 0.8
-					g._show_message("ЩИТ СПАС!", 0.9)
 				else:
 					g._game_over()
 				return
