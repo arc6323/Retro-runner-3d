@@ -46,6 +46,7 @@ func _create_interface() -> void:
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 52)
 	title.text = "НЕОНОВАЯ\nПУСТОШЬ"
+	title.visible = false
 	root.add_child(title)
 	prompt = Label.new()
 	prompt.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
@@ -55,7 +56,8 @@ func _create_interface() -> void:
 	prompt.offset_right = -28
 	prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	prompt.add_theme_font_size_override("font_size", 24)
-	prompt.text = "КОСНИСЬ РЭДА ИЛИ КВАДРОЦИКЛА, ЧТОБЫ НАЧАТЬ"
+	prompt.text = ""
+	prompt.visible = false
 	root.add_child(prompt)
 	garage_button = _make_menu_button("ГАРАЖ", 0)
 	root.add_child(garage_button)
@@ -157,14 +159,13 @@ func _enter_roadside_idle() -> void:
 	crash_active = false
 	crash_time = 0.0
 	crash_car = null
-	title.visible = true
-	prompt.visible = true
+	title.visible = false
+	prompt.visible = false
 	garage_button.visible = true
 	settings_button.visible = true
 	hud.visible = false
 	garage_panel.visible = false
 	settings_panel.visible = false
-	prompt.text = "РЕКОРД %05d\nКОСНИСЬ РЭДА ИЛИ КВАДРОЦИКЛА, ЧТОБЫ НАЧАТЬ" % high_score if high_score > 0 else "КОСНИСЬ РЭДА ИЛИ КВАДРОЦИКЛА, ЧТОБЫ НАЧАТЬ"
 
 func _begin_start_sequence() -> void:
 	if game_state != GameState.ROADSIDE_IDLE:
@@ -172,7 +173,6 @@ func _begin_start_sequence() -> void:
 	_close_menus()
 	game_state = GameState.MOUNTING
 	transition_time = 0.0
-	prompt.text = "ВЫХОДИМ НА ТРАССУ..."
 	garage_button.visible = false
 	settings_button.visible = false
 
