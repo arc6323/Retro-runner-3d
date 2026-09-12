@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
+trap 'echo "VALIDATION FAILED: line $LINENO: $BASH_COMMAND"' ERR
 
 # Invariant checks across all GDScript files after the split.
-gd() { grep -R -q --include='*.gd' "$1" .; }
+gd() { echo "CHECK: $1"; grep -R -q --include='*.gd' "$1" .; }
 
 gd 'enum GameState { ROADSIDE_IDLE, MOUNTING, MERGING, RUNNING'
 gd 'func _physics_process(delta: float)'
