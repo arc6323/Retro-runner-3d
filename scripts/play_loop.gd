@@ -3,17 +3,21 @@ extends RefCounted
 
 const SPEED_MULTIPLIER := 3.0
 const TRAFFIC_RAMP_CLEARANCE := 10.0
-const RUN_START_GRACE := 1.35
+const TRAFFIC_OBSTACLE_CLEARANCE := 8.0
+const RUN_START_GRACE := 3.0
 const PICKUP_RECYCLE_Z := 24.0
 const MAGNET_RANGE := 8.0
 const FLIGHT_LANDING_INVULNERABILITY := 3.5
+const RAMP_HALF_LENGTH := 4.1
+const RAMP_TOP_Y := 0.59
+const RAMP_ANGLE_DEG := -11.0
+const RAMP_PLAYER_Y_OFFSET := 0.0
 
 static func animate_wolf(g: Node) -> void:
 	if g.wolf == null:
 		return
 	var delta: float = g.get_physics_process_delta_time()
 	if g.game_state == g.GameState.ROADSIDE_IDLE:
-		# Keep the parked quad centered; the standing wolf remains beside it.
 		g.player.position = Vector3(0.0, 0.0, 4.0)
 		g.wolf.position.y = sin(g.elapsed_time * 1.55) * 0.028
 		g.wolf.rotation_degrees.z = sin(g.elapsed_time * 0.55) * 1.8
@@ -62,7 +66,6 @@ static func update_merging(g: Node, delta: float) -> void:
 	g.transition_time += delta
 	var t: float = clampf(g.transition_time / 1.15, 0.0, 1.0)
 	var smooth_t: float = smoothstep(0.0, 1.0, t)
-	# The quad is already centered before the start; only move it forward into the run.
 	g.player.position.x = 0.0
 	g.player.position.z = lerpf(4.0, 0.0, smooth_t)
 	g.vehicle_visual.rotation_degrees.z = 0.0
@@ -72,7 +75,6 @@ static func update_merging(g: Node, delta: float) -> void:
 		g.vehicle_visual.rotation_degrees.z = 0.0
 		g.hud.visible = true
 		g.set_meta("run_grace_remaining", RUN_START_GRACE)
-		# Before start cars are side-only. From this moment they can use any of the three lanes.
 		for car in g.traffic:
 			var start_lane: int = g.rng.randi_range(0, 2)
 			car.set_meta("lane", start_lane)
@@ -107,28 +109,80 @@ static func update_running(g: Node, delta: float) -> void:
 		g.ramp_used = false
 	_update_pickups(g, delta, current_speed)
 	g._move_traffic(delta, current_speed * 0.72, true)
+	_update_ramp_and_jump(g, delta)
 	if g.flight_remaining > 0.0:
 		g.player.position.y = lerpf(g.player.position.y, 2.8, min(1.0, delta * 7.0))
-	elif not g.jumping and g.player.position.y > 0.0:
+	elif not g.jumping and not _ramp_under_player(g) and g.player.position.y > 0.0:
 		g.player.position.y = lerpf(g.player.position.y, 0.0, min(1.0, delta * 8.0))
 	g._update_world_shift(delta)
 	g.vehicle_visual.rotation_degrees.z = 0.0
 	if g.wolf != null and not g.jumping:
 		g.wolf.rotation_degrees.z = 0.0
-	var trick_before_jump: bool = g.trick_requested
-	g._update_jump(delta)
-	if g.jumping and not trick_before_jump:
-		g.trick_angle = 0.0
-		g.vehicle_visual.rotation_degrees.x = 0.0
-		g.wolf.rotation_degrees.x = 0.0
 	_update_powerup_visuals(g, delta)
 	for spin_pivot in g.wheel_spin_pivots:
 		spin_pivot.rotate_x(current_speed * delta * 1.7)
-	if not g.jumping and g.flight_remaining <= 0.0:
+	if not g.jumping and g.flight_remaining <= 0.0 and not _ramp_under_player(g):
 		g.vehicle_visual.position.y = lerpf(g.vehicle_visual.position.y, sin(g.elapsed_time * current_speed * 0.55) * 0.018, min(1.0, delta * 10.0))
 	g._update_camera(delta)
 	g.message_time = 0.0
 	g._update_hud(delta)
+
+static func _update_ramp_and_jump(g: Node, delta: float) -> void:
+	# Flight is a true airborne state: ramps cannot start a second jump.
+	if g.flight_remaining > 0.0:
+		g.ramp_used = true
+		g.jumping = false
+		g.jump_velocity = 0.0
+		g.trick_requested = false
+		g.vehicle_visual.rotation_degrees.x = 0.0
+		g.wolf.rotation_degrees.x = 0.0
+		return
+
+	if g.jumping:
+		g.jump_velocity -= g.jump_gravity * delta
+		g.player.position.y += g.jump_velocity * delta
+		g.trick_angle += (560.0 if g.trick_requested else 280.0) * delta
+		g.vehicle_visual.rotation_degrees.x = g.trick_angle
+		g.wolf.rotation_degrees.x = g.trick_angle * 0.92
+		if g.player.position.y <= 0.0 and g.jump_velocity < 0.0:
+			g.player.position.y = 0.0
+			g.jumping = false
+			g.jump_velocity = 0.0
+			g.vehicle_visual.rotation_degrees.x = 0.0
+			g.wolf.rotation_degrees.x = 0.0
+			g.camera_shake = 0.55 if g.trick_requested else 0.35
+			if g.trick_requested:
+				g.trick_score += g.TRICK_BONUS
+			g.trick_requested = false
+		return
+
+	if not _ramp_under_player(g):
+		return
+	if g.lane != g.ramp_lane:
+		return
+
+	# Physical ramp contact: keep the quad on the inclined deck instead of letting it sink through.
+	var local_z: float = g.player.position.z - g.ramp.position.z
+	var surface_y: float = RAMP_TOP_Y * cos(deg_to_rad(RAMP_ANGLE_DEG)) - local_z * sin(deg_to_rad(RAMP_ANGLE_DEG))
+	g.player.position.y = max(0.0, surface_y + RAMP_PLAYER_Y_OFFSET)
+	g.vehicle_visual.rotation_degrees.x = RAMP_ANGLE_DEG
+	g.wolf.rotation_degrees.x = RAMP_ANGLE_DEG * 0.92
+
+	# Launch only after the quad has physically climbed to the near end of the ramp.
+	if local_z >= 2.7 and not g.ramp_used:
+		g.ramp_used = true
+		g.jumping = true
+		g.jump_velocity = 14.5
+		g.trick_angle = 0.0
+		g.player.position.y = max(g.player.position.y, 0.28)
+		g.vehicle_visual.rotation_degrees.x = 0.0
+		g.wolf.rotation_degrees.x = 0.0
+
+static func _ramp_under_player(g: Node) -> bool:
+	if g.ramp == null or g.lane != g.ramp_lane:
+		return false
+	var local_z: float = g.player.position.z - g.ramp.position.z
+	return local_z > -RAMP_HALF_LENGTH - 0.45 and local_z < RAMP_HALF_LENGTH + 0.45
 
 static func _update_pickups(g: Node, delta: float, current_speed: float) -> void:
 	var player_local_x: float = -g.world_pivot.position.x
@@ -203,34 +257,71 @@ static func scroll(nodes: Array, front_z: float, recycle: float, step: float) ->
 			node.position.z -= recycle
 
 static func _choose_safe_traffic_lane(g: Node, current_lane: int) -> int:
-	var candidates: Array[int] = [0, 2]
-	if g.ramp_lane == 0:
-		candidates = [2]
-	elif g.ramp_lane == 2:
-		candidates = [0]
+	var candidates: Array[int]
+	if current_lane == 1:
+		candidates = [0, 2]
+	elif current_lane == 0:
+		candidates = [1]
+	else:
+		candidates = [1]
+	if g.ramp_lane == 0 and candidates.has(0):
+		candidates.erase(0)
+	if g.ramp_lane == 2 and candidates.has(2):
+		candidates.erase(2)
 	if candidates.is_empty():
 		return current_lane
-	if candidates.has(g.lane) and candidates.size() > 1:
-		for candidate in candidates:
-			if candidate != g.lane:
-				return candidate
-	return candidates[0]
+	return candidates[g.rng.randi_range(0, candidates.size() - 1)]
+
+static func _lane_is_blocked(g: Node, lane_index: int, z_pos: float, self_car: Node3D) -> bool:
+	for other in g.traffic:
+		if other == self_car:
+			continue
+		var other_lane: int = int(other.get_meta("target_lane", other.get_meta("lane", 0)))
+		if other_lane == lane_index and abs(other.position.z - z_pos) < TRAFFIC_OBSTACLE_CLEARANCE:
+			return true
+	return false
+
+static func _avoid_traffic_obstacles(g: Node, car: Node3D, car_lane: int) -> int:
+	var candidates: Array[int]
+	if car_lane == 0:
+		candidates = [1]
+	elif car_lane == 2:
+		candidates = [1]
+	else:
+		candidates = [0, 2]
+	if g.ramp_lane >= 0 and abs(car.position.z - g.ramp.position.z) < TRAFFIC_RAMP_CLEARANCE and car_lane == g.ramp_lane:
+		candidates = candidates.filter(func(v): return v != g.ramp_lane)
+	for candidate in candidates:
+		if not _lane_is_blocked(g, candidate, car.position.z, car):
+			return candidate
+	return car_lane
 
 static func move_traffic(g: Node, delta: float, movement_speed: float, check_collision: bool) -> void:
+	var grace: float = float(g.get_meta("run_grace_remaining", 0.0))
 	for car in g.traffic:
 		var car_lane: int = int(car.get_meta("lane", 0))
-		if g.game_state != g.GameState.RUNNING and car_lane == 1:
-			car_lane = _choose_safe_traffic_lane(g, car_lane)
-		if g.game_state != g.GameState.RUNNING and abs(car.position.z - g.ramp.position.z) < TRAFFIC_RAMP_CLEARANCE and car_lane == g.ramp_lane:
-			car_lane = _choose_safe_traffic_lane(g, car_lane)
+		if g.game_state != g.GameState.RUNNING:
+			if car_lane == 1:
+				car_lane = 0 if g.rng.randi_range(0, 1) == 0 else 2
+			if abs(car.position.z - g.ramp.position.z) < TRAFFIC_RAMP_CLEARANCE and car_lane == g.ramp_lane:
+				car_lane = _choose_safe_traffic_lane(g, car_lane)
+		else:
+			# For the first 3 seconds, the center lane stays completely free.
+			if grace > 0.0 and car_lane == 1:
+				car_lane = _choose_safe_traffic_lane(g, car_lane)
+			if abs(car.position.z - g.ramp.position.z) < TRAFFIC_RAMP_CLEARANCE and car_lane == g.ramp_lane:
+				car_lane = _avoid_traffic_obstacles(g, car, car_lane)
+			if _lane_is_blocked(g, car_lane, car.position.z, car):
+				car_lane = _avoid_traffic_obstacles(g, car, car_lane)
+
 		car.set_meta("lane", car_lane)
 		car.set_meta("target_lane", car_lane)
-		car.position.x = g.LANE_X[car_lane]
-
 		car.position.z += movement_speed * delta
 		if car.position.z > 18.0:
 			car.position.z -= 128.0
-			car_lane = g.rng.randi_range(0, 2) if g.game_state == g.GameState.RUNNING else (0 if g.rng.randi_range(0, 1) == 0 else 2)
+			car_lane = g.rng.randi_range(0, 2) if g.game_state == g.GameState.RUNNING and grace <= 0.0 else (0 if g.rng.randi_range(0, 1) == 0 else 2)
+			if g.game_state == g.GameState.RUNNING and grace > 0.0:
+			car_lane = 0 if g.rng.randi_range(0, 1) == 0 else 2
 			car.set_meta("lane", car_lane)
 			car.set_meta("target_lane", car_lane)
 
@@ -241,7 +332,6 @@ static func move_traffic(g: Node, delta: float, movement_speed: float, check_col
 			if bool(wheel.get_meta("traffic_wheel", false)):
 				wheel.rotate_x(movement_speed * delta * 1.9)
 
-		var grace: float = float(g.get_meta("run_grace_remaining", 0.0))
 		if check_collision and grace <= 0.0 and g.flight_remaining <= 0.0 and g.flight_invulnerability_remaining <= 0.0 and not g.jumping:
 			var player_pos: Vector3 = g.player.global_position
 			var car_pos: Vector3 = car.global_position
