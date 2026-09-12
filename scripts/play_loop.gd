@@ -122,20 +122,9 @@ static func update_running(g: Node, delta: float) -> void:
 	if not g.jumping and g.flight_remaining <= 0.0:
 		g.vehicle_visual.position.y = lerpf(g.vehicle_visual.position.y, sin(g.elapsed_time * current_speed * 0.55) * 0.018, min(1.0, delta * 10.0))
 	g._update_camera(delta)
+	# Gameplay feedback stays visual; no giant text flashes over the road.
+	g.message_time = 0.0
 	g._update_hud(delta)
-	if g.message_time <= 0.0:
-		var status: String = "МОНЕТЫ %03d" % g.coins
-		if g.shield_remaining > 0.0:
-			status += "  •  ЩИТ"
-		if g.magnet_remaining > 0.0:
-			status += "  •  МАГНИТ"
-		if g.boost_remaining > 0.0:
-			status += "  •  БУСТ"
-		if g.flight_remaining > 0.0:
-			status += "  •  ПОЛЁТ"
-		if g.flight_invulnerability_remaining > 0.0:
-			status += "  •  НЕУЯЗВИМОСТЬ %dс" % int(ceil(g.flight_invulnerability_remaining))
-		g.hud.text += "\n" + status
 
 static func _update_pickups(g: Node, delta: float, current_speed: float) -> void:
 	var player_local_x: float = -g.world_pivot.position.x
