@@ -177,6 +177,8 @@ static func _collect_pickup(g: Node, index: int) -> void:
 		g.boost_remaining = 2.5
 		g._show_message("УСКОРЕНИЕ!", 0.65)
 	elif pickup_type == "flight":
+		# Lock out the current ramp while airborne; the next ramp is active normally.
+		g.ramp_used = true
 		g.flight_remaining = 4.5
 		g.flight_invulnerability_remaining = 0.0
 		g.jumping = false
