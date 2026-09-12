@@ -3,7 +3,7 @@ extends Node3D
 
 enum GameState { ROADSIDE_IDLE, MOUNTING, MERGING, RUNNING, PAUSED, GAME_OVER }
 
-const LANE_X := [-3.5, 0.0, 3.5]
+const LANE_X := [-4.6, -2.3, 0.0, 2.3, 4.6]
 const SWIPE_THRESHOLD := 70.0
 const DOUBLE_TAP_WINDOW := 0.32
 const TRICK_BONUS := 100
@@ -36,9 +36,9 @@ var props: Array[Node3D] = []
 var wheel_spin_pivots: Array[Node3D] = []
 var front_wheel_pivots: Array[Node3D] = []
 var ramp: Node3D
-var ramp_lane := 1
+var ramp_lane := 2
 var ramp_used := false
-var lane := 1
+var lane := 2
 var distance := 0.0
 var score := 0
 var trick_score := 0
@@ -98,10 +98,9 @@ func _create_world() -> void:
 	ramp_home = Vector3(LANE_X[ramp_lane], 0, -55)
 	ramp = CityKit.attach_ramp(world_pivot, ramp_home)
 	_create_pickups()
-	# Before the start, traffic uses only the side lanes. The center lane is free for the player.
 	var cars := [
-		[0, -24.0, Color(0.12, 0.13, 0.16)], [2, -41.0, Color(0.42, 0.08, 0.08)],
-		[0, -63.0, Color(0.08, 0.12, 0.22)], [2, -88.0, Color(0.18, 0.18, 0.16)],
+		[0, -24.0, Color(0.12, 0.13, 0.16)], [4, -41.0, Color(0.42, 0.08, 0.08)],
+		[0, -63.0, Color(0.08, 0.12, 0.22)], [4, -88.0, Color(0.18, 0.18, 0.16)],
 		[0, -112.0, Color(0.08, 0.08, 0.08)],
 	]
 	for spec in cars:
@@ -118,7 +117,7 @@ func _create_pickups() -> void:
 		var pickup_type: String = types[index]
 		var pickup := Node3D.new()
 		pickup.name = "Pickup_%02d_%s" % [index, pickup_type]
-		pickup.position = Vector3(LANE_X[index % 3], 0.9 if pickup_type == "coin" else 1.05, -18.0 - float(index) * 18.0)
+		pickup.position = Vector3(LANE_X[index % 5], 0.9 if pickup_type == "coin" else 1.05, -18.0 - float(index) * 18.0)
 		pickup.set_meta("pickup_type", pickup_type)
 		pickup.set_meta("home_position", pickup.position)
 		world_pivot.add_child(pickup)
