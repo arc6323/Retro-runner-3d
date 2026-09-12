@@ -16,10 +16,11 @@ static func update_camera(g: Node, delta: float) -> void:
 	elif g.game_state == g.GameState.MERGING:
 		target_fov = 66.0
 	elif g.jumping or g._ramp_is_close():
-		var ramp_blend := 0.22 if not g.jumping else 0.30
+		# Keep the ramp in view without pushing the camera so close that the ramp fills the screen.
+		var ramp_blend := 0.12 if not g.jumping else 0.18
 		target_position = chase_position.lerp(g.CAMERA_RAMP * 1.8, ramp_blend)
-		target_fov = lerpf(68.0, 72.0, ramp_blend)
-		target_look = g.player.position + Vector3(0, 1.45, -2.8)
+		target_fov = lerpf(68.0, 71.0, ramp_blend)
+		target_look = g.player.position + Vector3(0, 1.45, -3.4)
 	elif g.boost_remaining > 0.0:
 		target_position = (g.CAMERA_CHASE + Vector3(0, 0.15, 0.55)) * 1.8
 		target_fov = 71.0
