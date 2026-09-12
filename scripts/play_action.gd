@@ -37,11 +37,12 @@ static func update_camera(g: Node, delta: float) -> void:
 	g.camera.fov = lerpf(g.camera.fov, target_fov, min(1.0, delta * 2.4))
 	g.camera.look_at(target_look, Vector3.UP)
 	g.camera.rotation.z = 0.0
-	# The original movement speed is intentionally kept, but the HUD now uses a
-	# more believable road-speed scale: 50 km/h at the start, then rises with speed.
+	# Display speed: 50 km/h at the start, then increases smoothly with real game speed.
 	if g.game_state == g.GameState.RUNNING:
-		var raw_speed_kmh: float = float(g.get_meta("current_speed_kmh", 0.0))
-		g.set_meta("current_speed_kmh", raw_speed_kmh * 0.4208754209)
+		var physical_speed_kmh: float = float(g.get_meta("current_speed_kmh", 0.0))
+		var base_physical_speed_kmh: float = g.BASE_SPEED * 3.0 * 3.6
+		var display_speed_kmh: float = 50.0 + max(0.0, physical_speed_kmh - base_physical_speed_kmh) * 0.42
+		g.set_meta("current_speed_kmh", display_speed_kmh)
 	if g.game_state == g.GameState.GAME_OVER and g.crash_active:
 		_update_crash_visuals(g, delta)
 
@@ -55,7 +56,7 @@ static func _update_crash_visuals(g: Node, delta: float) -> void:
 		if abs(origin.x) < 0.4:
 			side = 1.0 if g.lane >= 2 else -1.0
 		var target_x: float = side * 8.6
-		var shove_p: float = smoothstep(0.0, 0.75, clampf(t / 0.75, 0.0, 1.0))
+		var shove_p: float = smoothstep(0.0, 1.0, clampf(t / 0.75, 0.0, 1.0))
 		g.crash_car.position.x = lerpf(origin.x, target_x, shove_p)
 		g.crash_car.position.z = origin.z - 5.5 * shove_p
 		g.crash_car.position.y = sin(shove_p * PI) * 1.0
@@ -65,7 +66,6 @@ static func _update_crash_visuals(g: Node, delta: float) -> void:
 		for wheel in g.crash_car.get_children():
 			if bool(wheel.get_meta("traffic_wheel", false)):
 				wheel.rotate_x(22.0 * delta)
-
 	if t < 1.25:
 		if g.wolf != g.wolf_riding:
 			g._set_active_wolf(g.wolf_riding)
@@ -116,7 +116,7 @@ static func _animate_dusting(g: Node, p: float) -> void:
 static func _update_dust_motion(g: Node, amount: float) -> void:
 	if g.crash_dust == null or g.crash_dust.is_empty():
 		return
-	var center := g.player.global_position + Vector3(0, 0.12, -4.0)
+	var center: Vector3 = g.player.global_position + Vector3(0, 0.12, -4.0)
 	for i in g.crash_dust.size():
 		var puff: Node3D = g.crash_dust[i]
 		var phase: float = float(i) * 0.7
@@ -145,9 +145,9 @@ static func handle_pointer(g: Node, position: Vector2, pressed: bool) -> void:
 	g.touch_active = false
 	var difference: Vector2 = position - g.touch_start
 	if g.game_state == g.GameState.ROADSIDE_IDLE:
-		# Use generous hit areas because the 3D models are visually large but their projected
-		# origin is near the center; a short tap anywhere on the hero/quad should start.
-		if g._hero_was_tapped(position) or g._vehicle_was_tapped(position) or (position.y > 430.0 and position.y < 1080.0):
+		# At the idle screen there are no gameplay controls, so any short tap in the scene starts the run.
+		# Menu buttons are handled by their own Control nodes and never reach this unhandled input path.
+		if difference.length() < 70.0:
 			g._begin_start_sequence()
 		return
 	if g.game_state == g.GameState.PAUSED:
