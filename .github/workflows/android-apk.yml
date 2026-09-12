@@ -65,6 +65,26 @@ jobs:
               path.write_text(text, encoding="utf-8")
           PY
           grep -n "import_etc2_astc" project.godot
+      - name: Apply flight artifact schedule
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          path = Path("scripts/game_base.gd")
+          text = path.read_text(encoding="utf-8")
+          old_types = 'var types := ["coin", "coin", "magnet", "coin", "coin", "flight", "coin", "magnet", "coin", "coin", "coin", "flight", "coin", "magnet", "coin", "coin", "coin", "flight", "coin", "coin"]'
+          new_types = 'var types := ["coin", "coin", "magnet", "coin", "coin", "flight", "coin", "magnet", "coin", "coin", "coin", "coin", "coin", "magnet", "coin", "coin", "coin", "coin", "coin", "coin"]'
+          if old_types not in text:
+              raise SystemExit("flight pickup list pattern not found")
+          text = text.replace(old_types, new_types, 1)
+          old_pos = 'pickup.position = Vector3(LANE_X[index % 5], 0.9 if pickup_type == "coin" else 1.05, -18.0 - float(index) * 18.0)'
+          new_pos = 'pickup.position = Vector3(LANE_X[index % 5], 0.9 if pickup_type == "coin" else 1.05, -4000.0 if pickup_type == "flight" else -18.0 - float(index) * 18.0)'
+          if old_pos not in text:
+              raise SystemExit("pickup position pattern not found")
+          text = text.replace(old_pos, new_pos, 1)
+          path.write_text(text, encoding="utf-8")
+          PY
+          grep -n 'var types :=' scripts/game_base.gd
+          grep -n '4000.0 if pickup_type' scripts/game_base.gd
       - name: Import project
         run: godot --headless --path . --editor --quit
       - name: Validate project invariants
