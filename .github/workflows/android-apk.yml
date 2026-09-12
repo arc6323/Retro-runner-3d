@@ -6,6 +6,7 @@ on:
     branches:
       - main
       - master
+      - jump-fix
 
 jobs:
   build-apk:
