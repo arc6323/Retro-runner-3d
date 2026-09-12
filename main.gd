@@ -78,7 +78,7 @@ func _create_interface() -> void:
 	hud.visible = false
 	root.add_child(hud)
 	garage_panel = _build_simple_panel(root, "ГАРАЖ", "РЭД\nДОСТУПЕН")
-	settings_panel = _build_simple_panel(root, "НАСТРОЙКИ", "ЗВУК: ВКЛ\n\nСвайп ← → — 5 полос\nСвайп вверх — прыжок / трюк\nТап — трюк / ускорение")
+	settings_panel = _build_simple_panel(root, "НАСТРОЙКИ", "ЗВУК: ВКЛ\n\nСвайп ← → — 5 полос\nСвайп вверх — прыжок / трюк\nТап — трюк")
 
 func _make_menu_button(text_value: String, side: int) -> Button:
 	var button := Button.new()
@@ -208,7 +208,19 @@ func _update_mounting(delta: float) -> void:
 	PlayLoop.update_mounting(self, delta)
 
 func _update_merging(delta: float) -> void:
-	PlayLoop.update_merging(self, delta)
+	# Keep the traffic that was already on the road before start; do not teleport it at RUNNING.
+	transition_time += delta
+	var t: float = clampf(transition_time / 1.15, 0.0, 1.0)
+	var smooth_t: float = smoothstep(0.0, 1.0, t)
+	player.position.x = 0.0
+	player.position.z = lerpf(4.0, 0.0, smooth_t)
+	vehicle_visual.rotation_degrees.z = 0.0
+	if t >= 1.0:
+		player.position = Vector3(0.0, player.position.y, 0.0)
+		game_state = GameState.RUNNING
+		vehicle_visual.rotation_degrees.z = 0.0
+		hud.visible = true
+		set_meta("run_grace_remaining", 3.0)
 
 func _update_running(delta: float) -> void:
 	PlayLoop.update_running(self, delta)
@@ -302,48 +314,47 @@ func _update_crash_sequence(delta: float) -> void:
 		return
 	crash_time += delta
 	var t: float = crash_time
-	# 0.0–0.9: Red is thrown forward, away from the quad, in the road's -Z direction.
-	if t < 0.9:
+	# Red starts outside the quad immediately, then is launched far forward.
+	if t < 1.15:
 		if wolf != wolf_riding:
 			_set_active_wolf(wolf_riding)
-		var p: float = clampf(t / 0.9, 0.0, 1.0)
-		var arc: float = sin(p * PI) * 2.0
-		wolf_riding.position = Vector3(0.0, 0.10 + arc, -5.0 * p)
-		wolf_riding.rotation_degrees = Vector3(lerpf(0.0, -110.0, p), 180.0, lerpf(0.0, -12.0, p))
+		var p: float = clampf(t / 1.15, 0.0, 1.0)
+		var arc: float = sin(p * PI) * 2.8
+		wolf_riding.position = Vector3(0.0, 0.55 + arc, -1.8 - 7.2 * p)
+		wolf_riding.rotation_degrees = Vector3(lerpf(0.0, -150.0, p), 180.0, lerpf(0.0, -18.0, p))
 		_update_crash_dust(p * 0.55)
-	# 0.9–1.8: Red stands up several meters ahead and dusts himself off.
-	elif t < 1.8:
+	elif t < 2.25:
 		if wolf != wolf_standing:
 			_set_active_wolf(wolf_standing)
-		var stand_p: float = smoothstep(0.0, 1.0, (t - 0.9) / 0.9)
-		wolf_standing.position = Vector3(0.0, 0.0, -5.0)
+		var stand_p: float = smoothstep(0.0, 1.0, (t - 1.15) / 1.10)
+		wolf_standing.position = Vector3(0.0, 0.0, -9.0)
 		wolf_standing.rotation_degrees = Vector3(0.0, 180.0, sin(stand_p * PI * 2.0) * 7.0)
 		if wolf_head != null:
 			wolf_head.rotation_degrees.y = sin(stand_p * PI * 4.0) * 12.0
-		_update_crash_dust(1.0 - stand_p * 0.5)
-	# 1.8–3.4: Red walks/runs back to the quad.
-	elif t < 3.4:
+		_update_crash_dust(0.8 - stand_p * 0.8)
+	elif t < 4.25:
 		if wolf != wolf_standing:
 			_set_active_wolf(wolf_standing)
-		var return_p: float = smoothstep(0.0, 1.0, (t - 1.8) / 1.6)
-		wolf_standing.position = Vector3(0.0, 0.0, lerpf(-5.0, 0.0, return_p))
+		var return_p: float = smoothstep(0.0, 1.0, (t - 2.25) / 2.0)
+		wolf_standing.position = Vector3(0.0, 0.0, lerpf(-9.0, 0.0, return_p))
 		wolf_standing.rotation_degrees = Vector3(0.0, 180.0, 0.0)
-		_update_crash_dust(0.5 - return_p * 0.5)
+		_update_crash_dust(0.0)
 	else:
 		_set_active_wolf(wolf_riding)
 		wolf_riding.position = Vector3.ZERO
 		wolf_riding.rotation_degrees = Vector3(0.0, 180.0, 0.0)
 		_clear_crash_dust()
-	# Collision car is kicked forward, in the same -Z direction as the runner's travel.
+	# The collision car is launched forward and spins around the vertical axis.
 	if crash_car != null and is_instance_valid(crash_car):
-		var car_p: float = clampf(t / 1.35, 0.0, 1.0)
-		crash_car.position.z -= lerpf(2.8, 5.2, car_p) * delta
-		crash_car.rotation_degrees.x += 610.0 * delta
-		crash_car.rotation_degrees.z = sin(t * 10.0) * 24.0 * (1.0 - car_p)
+		var car_p: float = clampf(t / 1.45, 0.0, 1.0)
+		crash_car.position.z -= lerpf(3.5, 7.0, car_p) * delta
+		crash_car.rotation_degrees.y += 760.0 * delta
+		crash_car.rotation_degrees.x = sin(t * 7.0) * 10.0 * (1.0 - car_p)
+		crash_car.rotation_degrees.z = sin(t * 8.0) * 8.0 * (1.0 - car_p)
 		for wheel in crash_car.get_children():
 			if bool(wheel.get_meta("traffic_wheel", false)):
-				wheel.rotate_x(22.0 * delta)
-	camera_shake = max(camera_shake, 0.18 * max(0.0, 1.0 - min(t, 1.0)))
+				wheel.rotate_x(26.0 * delta)
+	camera_shake = max(camera_shake, 0.22 * max(0.0, 1.0 - min(t, 1.0)))
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("pause") and game_state in [GameState.RUNNING, GameState.PAUSED]:
@@ -385,9 +396,6 @@ func _handle_tap() -> void:
 	var now := Time.get_ticks_msec() / 1000.0
 	if jumping:
 		trick_requested = true
-	elif now - last_tap_time <= DOUBLE_TAP_WINDOW:
-		boost_remaining = 1.35
-		last_tap_time = -10.0
 	else:
 		last_tap_time = now
 
