@@ -20,8 +20,6 @@ test -s assets/models/red_wolf_riding.glb
 test -s assets/models/street_quad.glb
 ! grep -R -q --include='*.gd' 'func _build_quad' .
 ! grep -R -q --include='*.gd' 'func _build_wolf' .
-gd 'ДИСТАНЦИЯ'
-gd 'КОСНИСЬ РЭДА ИЛИ КВАДРОЦИКЛА'
 ! grep -R -q --include='*.gd' 'TRICK button' .
 test -s tests/gameplay_smoke.gd
 grep -q 'Gameplay smoke test passed' tests/gameplay_smoke.gd
@@ -33,6 +31,10 @@ test -s scripts/city_kit.gd
 test -s scripts/play_loop.gd
 test -s scripts/play_action.gd
 test -s scripts/game_base.gd
+# Clean portrait HUD: distance and speed remain visible without requiring large instructional overlays.
+gd 'current_speed_kmh'
+gd '_update_hud'
+gd 'hud.visible = true'
 # New gameplay invariants: verify the speed system and ramp lane state exist.
 gd 'BASE_SPEED'
 gd 'BOOST_SPEED'
