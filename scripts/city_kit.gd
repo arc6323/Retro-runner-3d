@@ -84,12 +84,15 @@ static func make_car(car_lane: int, z: float, color: Color, lane_x: Array) -> No
 	var car := Node3D.new()
 	car.position = Vector3(lane_x[car_lane], 0, z)
 	car.set_meta("lane", car_lane)
-	# Brighter silhouette so traffic remains readable against dark city streets.
-	var body_color := color.lightened(0.28)
-	car.add_child(MeshKit.box(Vector3(2.15, 0.82, 4.3), Vector3(0, 0.66, 0), body_color, body_color * 0.12))
-	car.add_child(MeshKit.box(Vector3(1.72, 0.62, 2.0), Vector3(0, 1.24, -0.15), Color(0.12, 0.16, 0.19), Color(0.08, 0.28, 0.38)))
-	# Bright roof stripe makes the right-side car immediately distinguishable.
-	car.add_child(MeshKit.box(Vector3(1.35, 0.10, 2.45), Vector3(0, 1.56, -0.05), Color(0.9, 0.72, 0.18), Color(0.95, 0.5, 0.06)))
+	# Strong self-lit silhouette: every traffic car remains readable in dark city sections.
+	var body_color := color.lightened(0.38)
+	var body_emission := body_color * 0.22
+	car.add_child(MeshKit.box(Vector3(2.15, 0.82, 4.3), Vector3(0, 0.66, 0), body_color, body_emission))
+	car.add_child(MeshKit.box(Vector3(1.72, 0.62, 2.0), Vector3(0, 1.24, -0.15), Color(0.14, 0.18, 0.22), Color(0.12, 0.38, 0.48)))
+	# Bright roof bar + side markers prevent silhouette loss at distance.
+	car.add_child(MeshKit.box(Vector3(1.45, 0.12, 2.55), Vector3(0, 1.56, -0.05), Color(1.0, 0.72, 0.10), Color(1.0, 0.55, 0.04)))
+	car.add_child(MeshKit.box(Vector3(0.10, 0.10, 2.65), Vector3(-1.08, 0.82, 0), Color(0.2, 0.85, 1.0), Color(0.1, 0.9, 1.0)))
+	car.add_child(MeshKit.box(Vector3(0.10, 0.10, 2.65), Vector3(1.08, 0.82, 0), Color(0.2, 0.85, 1.0), Color(0.1, 0.9, 1.0)))
 	car.add_child(MeshKit.box(Vector3(0.50, 0.16, 0.10), Vector3(-0.68, 0.68, -2.18), Color(1.0, 0.98, 0.84), Color(1.0, 0.95, 0.62)))
 	car.add_child(MeshKit.box(Vector3(0.50, 0.16, 0.10), Vector3(0.68, 0.68, -2.18), Color(1.0, 0.98, 0.84), Color(1.0, 0.95, 0.62)))
 	car.add_child(MeshKit.box(Vector3(0.48, 0.16, 0.10), Vector3(-0.68, 0.72, 2.16), Color(0.95, 0.16, 0.10), Color(0.85, 0.05, 0.03)))
