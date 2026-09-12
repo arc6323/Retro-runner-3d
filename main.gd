@@ -296,7 +296,6 @@ func _update_crash_dust(t: float) -> void:
 		var spread := Vector3(cos(phase) * 1.1, 0.15 + float(i % 3) * 0.18, sin(phase) * 0.8)
 		puff.global_position = center + spread + Vector3(0, 0, -t * 1.4)
 		puff.scale = Vector3.ONE * (0.25 + t * (1.25 + float(i % 3) * 0.25))
-		puff.modulate = Color(1.0, 1.0, 1.0, max(0.0, 1.0 - t * 0.85))
 
 func _update_crash_sequence(delta: float) -> void:
 	if not crash_active:
