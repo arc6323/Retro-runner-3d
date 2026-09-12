@@ -37,12 +37,16 @@ static func update_camera(g: Node, delta: float) -> void:
 	g.camera.fov = lerpf(g.camera.fov, target_fov, min(1.0, delta * 2.4))
 	g.camera.look_at(target_look, Vector3.UP)
 	g.camera.rotation.z = 0.0
+	# The original movement speed is intentionally kept, but the HUD now uses a
+	# more believable road-speed scale: 50 km/h at the start, then rises with speed.
+	if g.game_state == g.GameState.RUNNING:
+		var raw_speed_kmh: float = float(g.get_meta("current_speed_kmh", 0.0))
+		g.set_meta("current_speed_kmh", raw_speed_kmh * 0.4208754209)
 	if g.game_state == g.GameState.GAME_OVER and g.crash_active:
 		_update_crash_visuals(g, delta)
 
 static func _update_crash_visuals(g: Node, delta: float) -> void:
 	var t: float = g.crash_time
-	# The traffic car gets a lateral impulse first, then leaves the road while spinning around Y.
 	if g.crash_car != null and is_instance_valid(g.crash_car):
 		if not g.crash_car.has_meta("crash_visual_origin"):
 			g.crash_car.set_meta("crash_visual_origin", g.crash_car.position)
@@ -62,7 +66,6 @@ static func _update_crash_visuals(g: Node, delta: float) -> void:
 			if bool(wheel.get_meta("traffic_wheel", false)):
 				wheel.rotate_x(22.0 * delta)
 
-	# 0.0–1.25: Red is thrown well ahead of the quad.
 	if t < 1.25:
 		if g.wolf != g.wolf_riding:
 			g._set_active_wolf(g.wolf_riding)
@@ -71,7 +74,6 @@ static func _update_crash_visuals(g: Node, delta: float) -> void:
 		g.wolf_riding.position = Vector3(0.0, 0.45 + arc, -2.6 - 8.4 * p)
 		g.wolf_riding.rotation_degrees = Vector3(lerpf(0.0, -155.0, p), 180.0, lerpf(0.0, -14.0, p))
 		_update_dust_motion(g, p)
-	# 1.25–2.45: he stands up, turns toward the quad and dusts himself off.
 	elif t < 2.45:
 		if g.wolf != g.wolf_standing:
 			g._set_active_wolf(g.wolf_standing)
@@ -82,7 +84,6 @@ static func _update_crash_visuals(g: Node, delta: float) -> void:
 			g.wolf_head.rotation_degrees.y = sin(stand_p * PI * 5.0) * 18.0
 		_animate_dusting(g, stand_p)
 		_update_dust_motion(g, 1.0 - stand_p * 0.75)
-	# 2.45–4.75: walk back toward the quad, facing it the whole time.
 	elif t < 4.75:
 		if g.wolf != g.wolf_standing:
 			g._set_active_wolf(g.wolf_standing)
@@ -98,7 +99,6 @@ static func _update_crash_visuals(g: Node, delta: float) -> void:
 		_settle_after_crash(g)
 
 static func _animate_dusting(g: Node, p: float) -> void:
-	# Use common arm node names when present; otherwise the body/head motion still reads as a dust-off gesture.
 	var left_arm_names := ["LeftArm", "ArmLeft", "LeftArmPivot", "ArmL"]
 	var right_arm_names := ["RightArm", "ArmRight", "RightArmPivot", "ArmR"]
 	for node_name in left_arm_names:
@@ -114,7 +114,7 @@ static func _animate_dusting(g: Node, p: float) -> void:
 	g.wolf_standing.rotation_degrees.z = sin(p * PI * 6.0) * 4.0
 
 static func _update_dust_motion(g: Node, amount: float) -> void:
-	if not "crash_dust" in g:
+	if g.crash_dust == null or g.crash_dust.is_empty():
 		return
 	var center := g.player.global_position + Vector3(0, 0.12, -4.0)
 	for i in g.crash_dust.size():
@@ -145,7 +145,9 @@ static func handle_pointer(g: Node, position: Vector2, pressed: bool) -> void:
 	g.touch_active = false
 	var difference: Vector2 = position - g.touch_start
 	if g.game_state == g.GameState.ROADSIDE_IDLE:
-		if g._hero_was_tapped(position) or g._vehicle_was_tapped(position):
+		# Use generous hit areas because the 3D models are visually large but their projected
+		# origin is near the center; a short tap anywhere on the hero/quad should start.
+		if g._hero_was_tapped(position) or g._vehicle_was_tapped(position) or (position.y > 430.0 and position.y < 1080.0):
 			g._begin_start_sequence()
 		return
 	if g.game_state == g.GameState.PAUSED:
