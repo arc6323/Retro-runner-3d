@@ -31,7 +31,7 @@ static func update_camera(g: Node, delta: float) -> void:
 	if g.game_state == g.GameState.GAME_OVER:
 		target_position = Vector3(0.0, 3.4, 6.4) * 1.8
 		target_fov = 52.0
-		target_look = g.player.position + Vector3(0, 1.1, 0)
+		target_look = g.player.position + Vector3(0, 1.1, -1.8)
 	g.camera.position = g.camera.position.lerp(target_position, min(1.0, delta * 2.6))
 	if g.camera_shake > 0.0:
 		g.camera.position += Vector3(g.rng.randf_range(-1.0, 1.0), g.rng.randf_range(-0.6, 0.6), 0.0) * g.camera_shake * 0.12
@@ -56,7 +56,8 @@ static func handle_pointer(g: Node, position: Vector2, pressed: bool) -> void:
 		g.game_state = g.GameState.RUNNING
 		return
 	if g.game_state == g.GameState.GAME_OVER:
-		if g.crash_active and g.crash_time < 1.25:
+		# Let the complete crash scene play before allowing a restart.
+		if g.crash_active and g.crash_time < 3.4:
 			return
 		g._reset_run()
 		return
