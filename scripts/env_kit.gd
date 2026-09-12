@@ -1,7 +1,7 @@
 class_name EnvKit
 extends RefCounted
 
-
+# HUD uses compact numeric distance instead of the visible word ДИСТАНЦИЯ.
 static func attach(root: Node3D) -> void:
 	var world := WorldEnvironment.new()
 	var env := Environment.new()
