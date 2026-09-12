@@ -75,8 +75,9 @@ static func update_merging(g: Node, delta: float) -> void:
 		g.vehicle_visual.rotation_degrees.z = 0.0
 		g.hud.visible = true
 		g.set_meta("run_grace_remaining", RUN_START_GRACE)
+		# Never spawn a center-lane car at the exact RUNNING transition.
 		for car in g.traffic:
-			var start_lane: int = g.rng.randi_range(0, 2)
+			var start_lane: int = 0 if g.rng.randi_range(0, 1) == 0 else 2
 			car.set_meta("lane", start_lane)
 			car.set_meta("target_lane", start_lane)
 			car.position.x = g.LANE_X[start_lane]
@@ -163,7 +164,8 @@ static func _update_ramp_and_jump(g: Node, delta: float) -> void:
 
 	# Physical ramp contact: keep the quad on the inclined deck instead of letting it sink through.
 	var local_z: float = g.player.position.z - g.ramp.position.z
-	var surface_y: float = RAMP_TOP_Y * cos(deg_to_rad(RAMP_ANGLE_DEG)) - local_z * sin(deg_to_rad(RAMP_ANGLE_DEG))
+	var angle_rad: float = deg_to_rad(RAMP_ANGLE_DEG)
+	var surface_y: float = g.ramp.position.y + RAMP_TOP_Y * cos(angle_rad) - local_z * sin(angle_rad)
 	g.player.position.y = max(0.0, surface_y + RAMP_PLAYER_Y_OFFSET)
 	g.vehicle_visual.rotation_degrees.x = RAMP_ANGLE_DEG
 	g.wolf.rotation_degrees.x = RAMP_ANGLE_DEG * 0.92
@@ -260,8 +262,6 @@ static func _choose_safe_traffic_lane(g: Node, current_lane: int) -> int:
 	var candidates: Array[int]
 	if current_lane == 1:
 		candidates = [0, 2]
-	elif current_lane == 0:
-		candidates = [1]
 	else:
 		candidates = [1]
 	if g.ramp_lane == 0 and candidates.has(0):
@@ -283,14 +283,12 @@ static func _lane_is_blocked(g: Node, lane_index: int, z_pos: float, self_car: N
 
 static func _avoid_traffic_obstacles(g: Node, car: Node3D, car_lane: int) -> int:
 	var candidates: Array[int]
-	if car_lane == 0:
-		candidates = [1]
-	elif car_lane == 2:
+	if car_lane == 0 or car_lane == 2:
 		candidates = [1]
 	else:
 		candidates = [0, 2]
-	if g.ramp_lane >= 0 and abs(car.position.z - g.ramp.position.z) < TRAFFIC_RAMP_CLEARANCE and car_lane == g.ramp_lane:
-		candidates = candidates.filter(func(v): return v != g.ramp_lane)
+	if abs(car.position.z - g.ramp.position.z) < TRAFFIC_RAMP_CLEARANCE and candidates.has(g.ramp_lane):
+		candidates.erase(g.ramp_lane)
 	for candidate in candidates:
 		if not _lane_is_blocked(g, candidate, car.position.z, car):
 			return candidate
@@ -306,7 +304,6 @@ static func move_traffic(g: Node, delta: float, movement_speed: float, check_col
 			if abs(car.position.z - g.ramp.position.z) < TRAFFIC_RAMP_CLEARANCE and car_lane == g.ramp_lane:
 				car_lane = _choose_safe_traffic_lane(g, car_lane)
 		else:
-			# For the first 3 seconds, the center lane stays completely free.
 			if grace > 0.0 and car_lane == 1:
 				car_lane = _choose_safe_traffic_lane(g, car_lane)
 			if abs(car.position.z - g.ramp.position.z) < TRAFFIC_RAMP_CLEARANCE and car_lane == g.ramp_lane:
@@ -320,8 +317,6 @@ static func move_traffic(g: Node, delta: float, movement_speed: float, check_col
 		if car.position.z > 18.0:
 			car.position.z -= 128.0
 			car_lane = g.rng.randi_range(0, 2) if g.game_state == g.GameState.RUNNING and grace <= 0.0 else (0 if g.rng.randi_range(0, 1) == 0 else 2)
-			if g.game_state == g.GameState.RUNNING and grace > 0.0:
-			car_lane = 0 if g.rng.randi_range(0, 1) == 0 else 2
 			car.set_meta("lane", car_lane)
 			car.set_meta("target_lane", car_lane)
 
