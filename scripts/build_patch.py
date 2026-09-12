@@ -2,10 +2,12 @@ from pathlib import Path
 import re
 
 
-def replace_once(path: Path, old: str, new: str, label: str) -> str:
+def replace_once(path: Path, old: str, new: str, label: str, *, required: bool = True) -> str:
     text = path.read_text(encoding="utf-8")
     if old not in text:
-        raise SystemExit(f"{label} pattern not found")
+        if required:
+            raise SystemExit(f"{label} pattern not found")
+        return text
     text = text.replace(old, new, 1)
     path.write_text(text, encoding="utf-8")
     return text
@@ -28,59 +30,87 @@ game_base.write_text(text, encoding="utf-8")
 
 loop = Path("scripts/play_loop.gd")
 text = loop.read_text(encoding="utf-8")
-if 'g.set_meta("current_speed_kmh", current_speed * 3.6)' in text:
-    text = text.replace('g.set_meta("current_speed_kmh", current_speed * 3.6)', 'g.set_meta("physical_speed_kmh", current_speed * 3.6)', 1)
 
-# The pickup movement used to sit inside the magnet-only branch. Remove that line
-# regardless of whether the source currently has three or four tabs of indentation.
-movement_pattern = r'\n\t{3,}pickup\.position\.z \+= current_speed \* delta\n'
-text, movement_count = re.subn(movement_pattern, '\n', text, count=1)
+# Keep physical speed separate from HUD display speed.
+if 'g.set_meta("current_speed_kmh", current_speed * 3.6)' in text:
+    text = text.replace(
+        'g.set_meta("current_speed_kmh", current_speed * 3.6)',
+        'g.set_meta("physical_speed_kmh", current_speed * 3.6)',
+        1,
+    )
+
+# Pickup movement must happen for every pickup, not only while the magnet is active.
+text, movement_count = re.subn(r'\n\t{3,}pickup\.position\.z \+= current_speed \* delta\n', '\n', text, count=1)
 if movement_count != 1:
     raise SystemExit("pickup movement line not found")
-
-# Add normal world movement after magnet attraction, before hit testing.
 hit_needle = '\t\tvar hit_distance: float = Vector2(pickup.position.x - player_local_x, pickup.position.z - player_z).length()'
-pos = text.find(hit_needle)
-if pos < 0:
+if hit_needle not in text:
     raise SystemExit("pickup hit test not found")
-text = text[:pos] + '\t\tif pickup_type != "flight":\n\t\t\tpickup.position.z += current_speed * delta\n' + text[pos:]
+if '\t\tif pickup_type != "flight":\n\t\t\tpickup.position.z += current_speed * delta\n' not in text:
+    text = text.replace(
+        hit_needle,
+        '\t\tif pickup_type != "flight":\n\t\t\tpickup.position.z += current_speed * delta\n' + hit_needle,
+        1,
+    )
 
-# Flight pickup is tied directly to the distance counter: 4 km, 8 km, 12 km, ...
-# It is the only flight pickup and its visual size is not changed.
+# Flight is scheduled by the distance counter: 4 km, 8 km, 12 km, ...
 old_type_line = '\t\tvar pickup_type: String = g.pickup_types[index]\n'
 flight_setup = '''\t\tvar pickup_type: String = g.pickup_types[index]\n\t\tif pickup_type == "flight":\n\t\t\tvar flight_target_distance: float = float(pickup.get_meta("flight_target_distance", 4000.0))\n\t\t\tpickup.set_meta("flight_target_distance", flight_target_distance)\n\t\t\tpickup.position.x = g.LANE_X[index % 5]\n\t\t\tpickup.position.y = 1.05\n\t\t\tpickup.position.z = player_z - (flight_target_distance - g.distance)\n'''
 if old_type_line not in text:
     raise SystemExit("pickup type line not found")
-text = text.replace(old_type_line, flight_setup, 1)
+if 'flight_target_distance' not in text:
+    text = text.replace(old_type_line, flight_setup, 1)
 
 old_recycle = '''\t\tif pickup.position.z > PICKUP_RECYCLE_Z:\n\t\t\tpickup.position = g.pickup_homes[index]\n\t\t\tpickup.position.x = g.LANE_X[g.rng.randi_range(0, 4)]\n'''
-new_recycle = '''\t\tif pickup.position.z > PICKUP_RECYCLE_Z:\n\t\t\tif pickup_type == "flight":\n\t\t\t\tvar next_flight_distance: float = float(pickup.get_meta("flight_target_distance", g.distance + 4000.0)) + 4000.0\n\t\t\t\tpickup.set_meta("flight_target_distance", next_flight_distance)\n\t\t\t\tcontinue\n\t\t\tpickup.position = g.pickup_homes[index]\n\t\t\tpickup.position.x = g.LANE_X[g.rng.randi_range(0, 4)]\n'''
-if old_recycle not in text:
-    raise SystemExit("pickup recycle block not found")
-text = text.replace(old_recycle, new_recycle, 1)
+new_recycle = '''\t\tif pickup.position.z > PICKUP_RECYCLE_Z:\n\t\t\tif pickup_type == "flight":\n\t\t\t\tvar next_flight_distance: float = float(pickup.get_meta("flight_target_distance", g.distance + 4000.0)) + 4000.0\n\t\t\t\tpickup.set_meta("flight_target_distance", next_flight_distance)\n\t\t\t\tcontinue\n\t\t\tpickup.position = g.pickup_homes[index]\n\t\t\tif pickup_type == "coin":\n\t\t\t\tvar pattern_step: int = int(floor(g.distance / 450.0)) + index\n\t\t\t\tvar pattern_kind: int = pattern_step % 3\n\t\t\t\tif pattern_kind == 0:\n\t\t\t\t\tpickup.position.x = g.LANE_X[(pattern_step * 2 + index) % 5]\n\t\t\t\t\tpickup.position.y = 0.92 + 0.32 * sin(float(index) * 0.9)\n\t\t\t\telif pattern_kind == 1:\n\t\t\t\t\tpickup.position.x = g.LANE_X[(index + pattern_step) % 5]\n\t\t\t\t\tpickup.position.y = 1.05\n\t\t\t\telse:\n\t\t\t\t\tpickup.position.x = g.LANE_X[(4 - index + pattern_step) % 5]\n\t\t\t\t\tpickup.position.y = 0.92 + 0.25 * cos(float(index) * 0.75)\n\t\t\telse:\n\t\t\t\tpickup.position.x = g.LANE_X[g.rng.randi_range(0, 4)]\n'''
+if old_recycle in text:
+    text = text.replace(old_recycle, new_recycle, 1)
 
-old_collect = '''\telif pickup_type == "flight":\n\t\tg.ramp_used = true\n\t\tg.flight_remaining = 4.5\n\t\tg.flight_invulnerability_remaining = 0.0\n\t\tg.jumping = false\n\t\tg.jump_velocity = 0.0\n\t\tg.trick_requested = false\n\t\tg.vehicle_visual.rotation_degrees.x = 0.0\n\t\tg.wolf.rotation_degrees.x = 0.0\n\t\tg.player.position.y = 2.8\n'''
-new_collect = '''\telif pickup_type == "flight":\n\t\tg.ramp_used = true\n\t\tg.flight_remaining = 4.5\n\t\tg.flight_invulnerability_remaining = 0.0\n\t\tg.jumping = false\n\t\tg.jump_velocity = 0.0\n\t\tg.trick_requested = false\n\t\tg.vehicle_visual.rotation_degrees.x = 0.0\n\t\tg.wolf.rotation_degrees.x = 0.0\n\t\tg.player.position.y = 2.8\n\t\tvar next_flight_distance: float = float(pickup.get_meta("flight_target_distance", g.distance + 4000.0)) + 4000.0\n\t\tpickup.set_meta("flight_target_distance", next_flight_distance)\n'''
-if old_collect not in text:
-    raise SystemExit("flight collect block not found")
-text = text.replace(old_collect, new_collect, 1)
+# Flight collection starts from the current road height; flight lift is handled smoothly by update_running.
+old_collect_y = '\t\tg.player.position.y = 2.8\n'
+if old_collect_y in text:
+    text = text.replace(old_collect_y, '\t\tg.player.position.y = max(g.player.position.y, 0.0)\n', 1)
 
-# Keep the no-auto-flip behavior intact; only smooth the visual pose while flying.
-old_flight_visual = '''\tif g.flight_remaining > 0.0:\n\t\tg.ramp_used = true\n\t\tg.jumping = false\n\t\tg.jump_velocity = 0.0\n\t\tg.trick_requested = false\n\t\tg.vehicle_visual.rotation_degrees.x = 0.0\n\t\tg.wolf.rotation_degrees.x = 0.0\n\t\treturn\n'''
-new_flight_visual = '''\tif g.flight_remaining > 0.0:\n\t\tg.ramp_used = true\n\t\tg.jumping = false\n\t\tg.jump_velocity = 0.0\n\t\tg.trick_requested = false\n\t\tvar flight_phase: float = sin(g.elapsed_time * 5.0)\n\t\tg.vehicle_visual.rotation_degrees.x = -4.0 + flight_phase * 1.5\n\t\tg.wolf.rotation_degrees.x = -3.7 + flight_phase * 1.4\n\t\treturn\n'''
-if old_flight_visual in text:
-    text = text.replace(old_flight_visual, new_flight_visual, 1)
+# Keep ramp behavior: no automatic backflip. Add a stronger landing cue only.
+old_landing = '\t\t\tg.camera_shake = 0.55 if g.trick_requested else 0.35\n'
+new_landing = '\t\t\tg.camera_shake = 0.65 if g.trick_requested else 0.42\n'
+if old_landing in text:
+    text = text.replace(old_landing, new_landing, 1)
+
+# Preserve the flight artifact's authored size. Previous runtime code shrank it to 58%.
+text = text.replace('\t\twing_l.scale = Vector3.ONE * 0.58', '\t\twing_l.scale = Vector3.ONE', 1)
+text = text.replace('\t\twing_r.scale = Vector3.ONE * 0.58', '\t\twing_r.scale = Vector3.ONE', 1)
+text = text.replace('\t\texhaust.scale = Vector3(0.62, 0.62, 0.62 + (sin(g.elapsed_time * 28.0) * 0.08 if flight_on else 0.0))', '\t\texhaust.scale = Vector3(1.0, 1.0, 1.0 + (sin(g.elapsed_time * 28.0) * 0.10 if flight_on else 0.0))', 1)
+
+# Faster, readable lane transitions with a clear quad lean and steering animation.
+old_world_shift = '''\tg.world_pivot.position.x = lerpf(g.world_pivot.position.x, target_x, min(1.0, delta * 8.5))\n\tvar lane_step := 2.3\n\tvar desired_steer: float = clampf(-error / lane_step, -1.0, 1.0) * 26.0\n\tg.steer_visual = lerpf(g.steer_visual, desired_steer, min(1.0, delta * 11.0))\n\tif abs(error) < 0.03:\n\t\tg.steer_visual = lerpf(g.steer_visual, 0.0, min(1.0, delta * 10.0))\n\tfor pivot in g.front_wheel_pivots:\n\t\tpivot.rotation_degrees.y = g.steer_visual\n\tg.vehicle_visual.rotation_degrees.z = 0.0\n\tif g.wolf != null:\n\t\tg.wolf.rotation_degrees.z = 0.0\n'''
+new_world_shift = '''\tg.world_pivot.position.x = lerpf(g.world_pivot.position.x, target_x, min(1.0, delta * 12.5))\n\tvar lane_step := 2.3\n\tvar desired_steer: float = clampf(-error / lane_step, -1.0, 1.0) * 32.0\n\tg.steer_visual = lerpf(g.steer_visual, desired_steer, min(1.0, delta * 14.0))\n\tif abs(error) < 0.03:\n\t\tg.steer_visual = lerpf(g.steer_visual, 0.0, min(1.0, delta * 12.0))\n\tfor pivot in g.front_wheel_pivots:\n\t\tpivot.rotation_degrees.y = g.steer_visual\n\tvar lean_target: float = clampf(-g.steer_visual * 0.14, -7.5, 7.5)\n\tg.vehicle_visual.rotation_degrees.z = lerpf(g.vehicle_visual.rotation_degrees.z, lean_target, min(1.0, delta * 12.0))\n\tif g.wolf != null and not g.jumping:\n\t\tg.wolf.rotation_degrees.z = lerpf(g.wolf.rotation_degrees.z, lean_target * 0.82, min(1.0, delta * 12.0))\n'''
+if old_world_shift not in text:
+    raise SystemExit("world shift block not found")
+text = text.replace(old_world_shift, new_world_shift, 1)
+
+# Scale traffic pressure with distance while preserving safer early gameplay.
+old_traffic = '\tg._move_traffic(delta, current_speed * 0.72, true)\n'
+new_traffic = '''\tvar traffic_factor: float = 0.72 + min(g.distance / 20000.0, 0.16)\n\tg._move_traffic(delta, current_speed * traffic_factor, true)\n'''
+if old_traffic in text:
+    text = text.replace(old_traffic, new_traffic, 1)
 
 loop.write_text(text, encoding="utf-8")
 
 action = Path("scripts/play_action.gd")
 action_text = action.read_text(encoding="utf-8")
-if 'var physical_speed_kmh: float = float(g.get_meta("current_speed_kmh", 0.0))' in action_text:
-    action_text = action_text.replace(
-        'var physical_speed_kmh: float = float(g.get_meta("current_speed_kmh", 0.0))',
-        'var physical_speed_kmh: float = float(g.get_meta("physical_speed_kmh", g.BASE_SPEED * 3.0 * 3.6))',
-        1,
-    )
-    action.write_text(action_text, encoding="utf-8")
 
-print("Build gameplay patch applied successfully")
+# Speed-responsive camera: make higher km/h visibly feel faster without changing physical speed.
+old_camera_fov = '\tvar target_fov := 68.0\n'
+new_camera_fov = '''\tvar target_fov := 68.0\n\tif g.game_state == g.GameState.RUNNING:\n\t\tvar shown_speed: float = float(g.get_meta("current_speed_kmh", 50.0))\n\t\ttarget_fov = clampf(68.0 + (shown_speed - 50.0) * 0.075, 68.0, 75.0)\n'''
+if old_camera_fov in action_text and 'shown_speed' not in action_text:
+    action_text = action_text.replace(old_camera_fov, new_camera_fov, 1)
+
+# Read physical speed, then derive the HUD-only speed from it.
+old_speed = 'var physical_speed_kmh: float = float(g.get_meta("current_speed_kmh", 0.0))'
+new_speed = 'var physical_speed_kmh: float = float(g.get_meta("physical_speed_kmh", g.BASE_SPEED * 3.0 * 3.6))'
+if old_speed in action_text:
+    action_text = action_text.replace(old_speed, new_speed, 1)
+action.write_text(action_text, encoding="utf-8")
+
+print("Build gameplay polish patch applied successfully")
