@@ -60,14 +60,19 @@ static func attach_lamps(world_pivot: Node3D) -> Array:
 static func attach_ramp(world_pivot: Node3D, position: Vector3) -> Node3D:
 	var ramp := Node3D.new()
 	ramp.name = "Ramp"
-	# Travel is toward positive Z. The ramp must rise toward the near/front edge.
+	# Low-profile road-colored ramp: it should read as part of the track, not a red wall.
 	ramp.position = position + Vector3(0.0, 0.20, 0.0)
 	world_pivot.add_child(ramp)
-	var deck := MeshKit.box(Vector3(2.0, 0.42, 8.2), Vector3(0, 0.38, 0), Color(0.55, 0.16, 0.12))
+	var deck := MeshKit.box(Vector3(2.18, 0.24, 8.2), Vector3(0, 0.22, 0), Color(0.16, 0.14, 0.14))
 	deck.rotation_degrees.x = 11.0
 	ramp.add_child(deck)
-	for x in [-0.96, 0.96]:
-		var rail := MeshKit.box(Vector3(0.10, 0.55, 8.2), Vector3(x, 0.5, 0), Color(0.75, 0.75, 0.72))
+	# Thin red edge accents keep the Soviet-retrofuturist style without filling the screen.
+	for x in [-1.02, 1.02]:
+		var edge := MeshKit.box(Vector3(0.08, 0.08, 8.2), Vector3(x, 0.36, 0), Color(0.62, 0.12, 0.09))
+		edge.rotation_degrees.x = 11.0
+		ramp.add_child(edge)
+	for x in [-0.98, 0.98]:
+		var rail := MeshKit.box(Vector3(0.07, 0.32, 8.2), Vector3(x, 0.42, 0), Color(0.58, 0.58, 0.56))
 		rail.rotation_degrees.x = 11.0
 		rail.set_meta("ramp_rail", true)
 		ramp.add_child(rail)
