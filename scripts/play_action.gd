@@ -1,11 +1,8 @@
 class_name PlayAction
 extends RefCounted
 
-
 static func update_jump(g: Node, delta: float) -> void:
-	# Jump simulation is owned by PlayLoop now. Kept as a compatibility stub.
 	return
-
 
 static func update_camera(g: Node, delta: float) -> void:
 	var chase_position: Vector3 = g.CAMERA_CHASE * 1.8
@@ -41,7 +38,6 @@ static func update_camera(g: Node, delta: float) -> void:
 	g.camera.look_at(target_look, Vector3.UP)
 	g.camera.rotation.z = 0.0
 
-
 static func handle_pointer(g: Node, position: Vector2, pressed: bool) -> void:
 	if pressed:
 		g.touch_start = position
@@ -59,6 +55,8 @@ static func handle_pointer(g: Node, position: Vector2, pressed: bool) -> void:
 		g.game_state = g.GameState.RUNNING
 		return
 	if g.game_state == g.GameState.GAME_OVER:
+		if g.crash_active and g.crash_time < 1.25:
+			return
 		g._reset_run()
 		return
 	if g.game_state != g.GameState.RUNNING:
@@ -69,7 +67,6 @@ static func handle_pointer(g: Node, position: Vector2, pressed: bool) -> void:
 		g._try_player_jump()
 	elif difference.length() < 34.0:
 		g._handle_tap()
-
 
 static func reset_run(g: Node) -> void:
 	g.distance = 0.0
