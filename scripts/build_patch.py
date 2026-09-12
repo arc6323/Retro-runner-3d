@@ -31,13 +31,14 @@ text = loop.read_text(encoding="utf-8")
 if 'g.set_meta("current_speed_kmh", current_speed * 3.6)' in text:
     text = text.replace('g.set_meta("current_speed_kmh", current_speed * 3.6)', 'g.set_meta("physical_speed_kmh", current_speed * 3.6)', 1)
 
-# The movement line is four tabs deep because it used to be inside the magnet-range branch.
-old_line = '\t\t\t\tpickup.position.z += current_speed * delta\n'
-if old_line not in text:
+# The pickup movement used to sit inside the magnet-only branch. Remove that line
+# regardless of whether the source currently has three or four tabs of indentation.
+movement_pattern = r'\n\t{3,}pickup\.position\.z \+= current_speed \* delta\n'
+text, movement_count = re.subn(movement_pattern, '\n', text, count=1)
+if movement_count != 1:
     raise SystemExit("pickup movement line not found")
-text = text.replace(old_line, '', 1)
 
-# Add the normal world movement after magnet attraction, before hit testing.
+# Add normal world movement after magnet attraction, before hit testing.
 hit_needle = '\t\tvar hit_distance: float = Vector2(pickup.position.x - player_local_x, pickup.position.z - player_z).length()'
 pos = text.find(hit_needle)
 if pos < 0:
@@ -59,7 +60,7 @@ if old_recycle not in text:
 text = text.replace(old_recycle, new_recycle, 1)
 
 old_collect = '''\telif pickup_type == "flight":\n\t\tg.ramp_used = true\n\t\tg.flight_remaining = 4.5\n\t\tg.flight_invulnerability_remaining = 0.0\n\t\tg.jumping = false\n\t\tg.jump_velocity = 0.0\n\t\tg.trick_requested = false\n\t\tg.vehicle_visual.rotation_degrees.x = 0.0\n\t\tg.wolf.rotation_degrees.x = 0.0\n\t\tg.player.position.y = 2.8\n'''
-new_collect = '''\telif pickup_type == "flight":\n\t\tg.ramp_used = true\n\t\tg.flight_remaining = 4.5\n\t\tg.flight_invulnerability_remaining = 0.0\n\t\tg.jumping = false\n\t\tg.jump_velocity = 0.0\n\t\tg.trick_requested = false\n\t\tg.vehicle_visual.rotation_degrees.x = 0.0\n\t\tg.wolf.rotation_degrees.x = 0.0\n\t\tvar next_flight_distance: float = float(pickup.get_meta("flight_target_distance", g.distance + 4000.0)) + 4000.0\n\t\tpickup.set_meta("flight_target_distance", next_flight_distance)\n'''
+new_collect = '''\telif pickup_type == "flight":\n\t\tg.ramp_used = true\n\t\tg.flight_remaining = 4.5\n\t\tg.flight_invulnerability_remaining = 0.0\n\t\tg.jumping = false\n\t\tg.jump_velocity = 0.0\n\t\tg.trick_requested = false\n\t\tg.vehicle_visual.rotation_degrees.x = 0.0\n\t\tg.wolf.rotation_degrees.x = 0.0\n\t\tg.player.position.y = 2.8\n\t\tvar next_flight_distance: float = float(pickup.get_meta("flight_target_distance", g.distance + 4000.0)) + 4000.0\n\t\tpickup.set_meta("flight_target_distance", next_flight_distance)\n'''
 if old_collect not in text:
     raise SystemExit("flight collect block not found")
 text = text.replace(old_collect, new_collect, 1)
