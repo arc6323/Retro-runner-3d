@@ -8,9 +8,10 @@ static func attach_road(world_pivot: Node3D) -> void:
 	world_pivot.add_child(MeshKit.box(Vector3(2.4, 0.22, 180), Vector3(7.2, -0.12, -70), Color(0.22, 0.21, 0.2)))
 	world_pivot.add_child(MeshKit.box(Vector3(0.12, 0.06, 180), Vector3(-5.55, 0.02, -70), Color(0.82, 0.78, 0.55), Color(0.55, 0.45, 0.15)))
 	world_pivot.add_child(MeshKit.box(Vector3(0.12, 0.06, 180), Vector3(5.55, 0.02, -70), Color(0.82, 0.78, 0.55), Color(0.55, 0.45, 0.15)))
-	for x in [-1.75, 1.75]:
+	# Four dashed separators create five playable lanes.
+	for x in [-3.45, -1.15, 1.15, 3.45]:
 		for z in range(-150, 20, 7):
-			world_pivot.add_child(MeshKit.box(Vector3(0.12, 0.03, 2.6), Vector3(x, 0.01, float(z)), Color(0.78, 0.76, 0.68)))
+			world_pivot.add_child(MeshKit.box(Vector3(0.10, 0.03, 2.6), Vector3(x, 0.01, float(z)), Color(0.78, 0.76, 0.68)))
 
 static func attach_building(world_pivot: Node3D, x: float, z: float, width: float, height: float, depth: float, variant: int) -> Node3D:
 	var building := Node3D.new()
@@ -59,15 +60,15 @@ static func attach_lamps(world_pivot: Node3D) -> Array:
 static func attach_ramp(world_pivot: Node3D, position: Vector3) -> Node3D:
 	var ramp := Node3D.new()
 	ramp.name = "Ramp"
-	# The ramp rises in the direction of travel: low end first, high end at the near side.
+	# Travel is toward positive Z. The ramp must rise toward the near/front edge.
 	ramp.position = position + Vector3(0.0, 0.20, 0.0)
 	world_pivot.add_child(ramp)
-	var deck := MeshKit.box(Vector3(3.1, 0.42, 8.2), Vector3(0, 0.38, 0), Color(0.55, 0.16, 0.12))
-	deck.rotation_degrees.x = -11.0
+	var deck := MeshKit.box(Vector3(2.0, 0.42, 8.2), Vector3(0, 0.38, 0), Color(0.55, 0.16, 0.12))
+	deck.rotation_degrees.x = 11.0
 	ramp.add_child(deck)
-	for x in [-1.5, 1.5]:
-		var rail := MeshKit.box(Vector3(0.14, 0.55, 8.2), Vector3(x, 0.5, 0), Color(0.75, 0.75, 0.72))
-		rail.rotation_degrees.x = -11.0
+	for x in [-0.96, 0.96]:
+		var rail := MeshKit.box(Vector3(0.10, 0.55, 8.2), Vector3(x, 0.5, 0), Color(0.75, 0.75, 0.72))
+		rail.rotation_degrees.x = 11.0
 		rail.set_meta("ramp_rail", true)
 		ramp.add_child(rail)
 	return ramp
