@@ -85,6 +85,85 @@ jobs:
           PY
           grep -n 'var types :=' scripts/game_base.gd
           grep -n '4000.0 if pickup_type' scripts/game_base.gd
+      - name: Apply gameplay motion fixes
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          loop = Path("scripts/play_loop.gd")
+          text = loop.read_text(encoding="utf-8")
+
+          old_speed = 'g.set_meta("current_speed_kmh", current_speed * 3.6)'
+          new_speed = 'g.set_meta("physical_speed_kmh", current_speed * 3.6)'
+          if old_speed not in text:
+              raise SystemExit("physical speed marker not found")
+          text = text.replace(old_speed, new_speed, 1)
+
+          old_pickup = '''\t\tif g.magnet_remaining > 0.0 and pickup_type == "coin":
+\t\t\tvar distance_to_player: float = Vector2(pickup.position.x - player_local_x, pickup.position.z - player_z).length()
+\t\t\tif distance_to_player < MAGNET_RANGE:
+\t\t\t\tpickup.position.x = lerpf(pickup.position.x, player_local_x, min(1.0, delta * 8.0))
+\t\t\t\tpickup.position.z = lerpf(pickup.position.z, player_z, min(1.0, delta * 8.0))
+\t\t\t\tpickup.position.z += current_speed * delta
+'''
+          new_pickup = '''\t\tif g.magnet_remaining > 0.0 and pickup_type == "coin":
+\t\t\tvar distance_to_player: float = Vector2(pickup.position.x - player_local_x, pickup.position.z - player_z).length()
+\t\t\tif distance_to_player < MAGNET_RANGE:
+\t\t\t\tpickup.position.x = lerpf(pickup.position.x, player_local_x, min(1.0, delta * 8.0))
+\t\t\t\tpickup.position.z = lerpf(pickup.position.z, player_z, min(1.0, delta * 8.0))
+\t\t# Every pickup must move toward the player with the world, not only coins inside magnet range.
+\t\tpickup.position.z += current_speed * delta
+'''
+          if old_pickup not in text:
+              raise SystemExit("pickup movement pattern not found")
+          text = text.replace(old_pickup, new_pickup, 1)
+
+          old_flight_visual = '''\tif g.flight_remaining > 0.0:
+\t\tg.ramp_used = true
+\t\tg.jumping = false
+\t\tg.jump_velocity = 0.0
+\t\tg.trick_requested = false
+\t\tg.vehicle_visual.rotation_degrees.x = 0.0
+\t\tg.wolf.rotation_degrees.x = 0.0
+\t\treturn
+'''
+          new_flight_visual = '''\tif g.flight_remaining > 0.0:
+\t\tg.ramp_used = true
+\t\tg.jumping = false
+\t\tg.jump_velocity = 0.0
+\t\tg.trick_requested = false
+\t\tvar flight_phase: float = sin(g.elapsed_time * 5.0)
+\t\tg.vehicle_visual.rotation_degrees.x = -4.0 + flight_phase * 1.5
+\t\tg.wolf.rotation_degrees.x = -3.7 + flight_phase * 1.4
+\t\treturn
+'''
+          if old_flight_visual not in text:
+              raise SystemExit("flight visual pattern not found")
+          text = text.replace(old_flight_visual, new_flight_visual, 1)
+
+          loop.write_text(text, encoding="utf-8")
+
+          action = Path("scripts/play_action.gd")
+          text = action.read_text(encoding="utf-8")
+          old_read = 'var physical_speed_kmh: float = float(g.get_meta("current_speed_kmh", 0.0))'
+          new_read = 'var physical_speed_kmh: float = float(g.get_meta("physical_speed_kmh", g.BASE_SPEED * 3.0 * 3.6))'
+          if old_read not in text:
+              raise SystemExit("HUD speed read pattern not found")
+          text = text.replace(old_read, new_read, 1)
+          action.write_text(text, encoding="utf-8")
+
+          # Do not snap the player to flight altitude when the pickup is collected.
+          # update_running() now performs a smooth takeoff/landing interpolation.
+          loop = Path("scripts/play_loop.gd")
+          text = loop.read_text(encoding="utf-8")
+          old_snap = '\t\tg.player.position.y = 2.8\n'
+          if old_snap not in text:
+              raise SystemExit("flight altitude snap pattern not found")
+          text = text.replace(old_snap, '', 1)
+          loop.write_text(text, encoding="utf-8")
+          PY
+          grep -n 'physical_speed_kmh' scripts/play_loop.gd scripts/play_action.gd
+          grep -n 'pickup.position.z += current_speed' scripts/play_loop.gd
       - name: Import project
         run: godot --headless --path . --editor --quit
       - name: Validate project invariants
